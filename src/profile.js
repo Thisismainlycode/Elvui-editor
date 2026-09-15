@@ -1,6 +1,7 @@
 import luaparse from 'luaparse';
 import { Decoder, Encoder } from 'cbor-x';
 import { Inflate, Unzlib, deflateSync } from 'fflate';
+import {decodeE1} from './legacy.js';
 
 export const LIMIT=4*1024*1024;
 export function get(root,path,fallback){let v=root;for(const k of path){if(!(v instanceof Map))return fallback;v=v.get(k);}return v===undefined?fallback:v;}
@@ -32,11 +33,13 @@ export function decodeE2(text){
  const s=text.slice(4).replace(/\s/g,'');if(!s||!/^[A-Za-z0-9+/]*={0,2}$/.test(s))throw Error('Invalid !E2! Base64 data.');
  let raw;try{raw=Uint8Array.from(atob(s),c=>c.charCodeAt(0));}catch{throw Error('Invalid !E2! Base64 data.');}
  let bytes;try{bytes=inflateLimited(raw,false);}catch(e){if(e.message.includes('limit'))throw e;try{bytes=inflateLimited(raw,true);}catch{throw Error('Could not decompress this profile. It may be incomplete or use an unsupported format.');}}
- // Search the binary-safe ASCII suffix; only the CBOR part is handed to the decoder.
+ const decoder=new Decoder({mapsAsObjects:false,useRecords:false});
+ try{const profile=normalize(decoder.decode(bytes));if(profile instanceof Map)return {name:'Imported profile',profile,format:'E2'};}catch{}
+ // Older exports append a name after the CBOR value.
  let marker=-1;const suffix=new TextEncoder().encode('::profile::');for(let i=bytes.length-suffix.length;i>=0;i--){if(suffix.every((c,j)=>bytes[i+j]===c)){marker=i;break;}}
- if(marker<0)throw Error('Only character profiles are editable. Import a Profile export, not Global, Private, or Filters.');
+ if(marker<0)throw Error('Could not read this !E2! profile. The data may be incomplete or use an unsupported format.');
  const name=new TextDecoder('utf-8',{fatal:true}).decode(bytes.subarray(marker+suffix.length));
- const profile=normalize(new Decoder({mapsAsObjects:false,useRecords:false}).decode(bytes.subarray(0,marker)));
+ const profile=normalize(decoder.decode(bytes.subarray(0,marker)));
  if(!(profile instanceof Map))throw Error('The profile root must be a table.');return {name:name||'Imported profile',profile,format:'E2'};
 }
 export function exportProfile(profile,name,format='lua'){
@@ -49,7 +52,7 @@ export function exportProfile(profile,name,format='lua'){
 export function parseInput(input){
  const text=input.replace(/^\uFEFF/,'').trim();if(!text)throw Error('Paste a profile or choose an ElvUI.lua file.');if(new TextEncoder().encode(text).length>LIMIT)throw Error('The maximum import size is 4 MB.');
  if(text.startsWith('!E2!'))return {profiles:[decodeE2(text)]};
- if(text.startsWith('!E1!'))throw Error('Legacy !E1! strings are not supported in this version. Use your local SavedVariables/ElvUI.lua file or an ElvUI Lua table export instead.');
+ if(text.startsWith('!E1!'))return {profiles:[decodeE1(text)]};
  let ast,name='Imported profile';let source=text;
  if(text.startsWith('{')){const match=text.match(/^([\s\S]+)::profile::([^\r\n]*)$/);if(match){source=match[1].replace(/\|\|/g,'|');name=match[2]||name;}else if(/::(private|global|filters)$/.test(text))throw Error('Import a character profile rather than Global, Private, or Filters settings.');source='return '+source;}
  let byteSource='';for(const b of new TextEncoder().encode(source))byteSource+=String.fromCharCode(b);

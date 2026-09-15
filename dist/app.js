@@ -5021,8 +5021,128 @@ try {
 } catch (e) {
 }
 
-// src/profile.js
+// src/legacy.js
+var alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789()";
 var LIMIT = 4 * 1024 * 1024;
+function decodePrint(text) {
+  const out = [];
+  let bits2 = 0, cache = 0;
+  for (const char of text) {
+    const n = alphabet.indexOf(char);
+    if (n < 0) throw Error("Invalid !E1! printable data.");
+    cache |= n << bits2;
+    bits2 += 6;
+    if (bits2 >= 8) {
+      out.push(cache & 255);
+      cache >>>= 8;
+      bits2 -= 8;
+    }
+  }
+  if (bits2 && cache) throw Error("Invalid !E1! padding.");
+  return Uint8Array.from(out);
+}
+function inflateLimited(input) {
+  let chunks = [], length = 0;
+  const stream = new Inflate((part) => {
+    length += part.length;
+    if (length > LIMIT) throw Error("Decoded profile exceeds the 4 MB limit.");
+    chunks.push(part);
+  });
+  for (let i = 0; i < input.length; i += 256) stream.push(input.subarray(i, i + 256), i + 256 >= input.length);
+  const out = new Uint8Array(length);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
+}
+function unescapeAce(s) {
+  const bytes = [];
+  for (let i = 0; i < s.length; i++) {
+    let n = s.charCodeAt(i);
+    if (n === 126) {
+      if (++i >= s.length) throw Error("Incomplete AceSerializer escape.");
+      n = s.charCodeAt(i);
+      n = n === 122 ? 30 : n === 123 ? 127 : n === 124 ? 126 : n === 125 ? 94 : n - 64;
+      if (n < 0 || n > 127) throw Error("Invalid AceSerializer escape.");
+    }
+    bytes.push(n);
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(bytes));
+}
+function deserializeAce(source2) {
+  let i = 0, nodes = 0;
+  const token = () => {
+    if (source2[i++] !== "^" || i >= source2.length) throw Error("Invalid AceSerializer token.");
+    const kind = source2[i++];
+    if (kind === "^") return { kind };
+    const end = source2.indexOf("^", i);
+    if (end < 0) throw Error("Incomplete AceSerializer data.");
+    const data = source2.slice(i, end);
+    i = end;
+    return { kind, data };
+  };
+  if (token().kind !== "1") throw Error("Unsupported AceSerializer version.");
+  function value(t, depth = 0) {
+    if (++nodes > 1e5 || depth > 100) throw Error("Profile is too large or nested too deeply.");
+    switch (t.kind) {
+      case "S":
+        return unescapeAce(t.data);
+      case "N": {
+        const n = Number(t.data);
+        if (!Number.isFinite(n)) throw Error("Invalid AceSerializer number.");
+        return n;
+      }
+      case "F": {
+        const e = token();
+        if (e.kind !== "f") throw Error("Invalid AceSerializer float.");
+        const n = Number(t.data) * 2 ** Number(e.data);
+        if (!Number.isFinite(n)) throw Error("Invalid AceSerializer float.");
+        return n;
+      }
+      case "B":
+        return true;
+      case "b":
+        return false;
+      case "T": {
+        const map = /* @__PURE__ */ new Map();
+        while (true) {
+          const k = token();
+          if (k.kind === "t") return map;
+          const key = value(k, depth + 1);
+          if (typeof key !== "string" && typeof key !== "boolean" && !(typeof key === "number" && Number.isFinite(key))) throw Error("Unsupported AceSerializer table key.");
+          map.set(key, value(token(), depth + 1));
+        }
+      }
+      default:
+        throw Error("Unsupported AceSerializer value.");
+    }
+  }
+  const profile2 = value(token());
+  if (!(profile2 instanceof Map) || token().kind !== "^" || i !== source2.length) throw Error("Invalid !E1! profile table.");
+  return profile2;
+}
+function decodeE1(text) {
+  const encoded = text.slice(4).replace(/\s/g, "");
+  if (!encoded) throw Error("Empty !E1! profile.");
+  let data;
+  try {
+    data = inflateLimited(decodePrint(encoded));
+  } catch (e) {
+    if (e.message.includes("limit")) throw e;
+    throw Error("Could not decompress this !E1! profile.");
+  }
+  const source2 = new TextDecoder("utf-8", { fatal: true }).decode(data);
+  const marker = source2.lastIndexOf("^^::profile::");
+  if (marker < 0) throw Error("Only character profiles can be upgraded from !E1!.");
+  const name2 = source2.slice(marker + 13);
+  const profile2 = deserializeAce(source2.slice(0, marker + 2));
+  return { name: name2 || "Imported profile", profile: profile2, format: "E1" };
+}
+
+// src/profile.js
+var LIMIT2 = 4 * 1024 * 1024;
 function get(root, path, fallback) {
   let v = root;
   for (const k of path) {
@@ -5108,11 +5228,11 @@ function normalize(v, depth = 0) {
   if (typeof v === "string" || typeof v === "boolean" || typeof v === "number" && Number.isFinite(v)) return v;
   throw Error("Unsupported CBOR value. Use an ElvUI Lua table export or saved settings file.");
 }
-function inflateLimited(bytes, zlib) {
+function inflateLimited2(bytes, zlib) {
   let chunks = [], total = 0;
   const stream = new (zlib ? Unzlib : Inflate)((part) => {
     total += part.length;
-    if (total > LIMIT) throw Error("Decoded profile exceeds the 4 MB limit.");
+    if (total > LIMIT2) throw Error("Decoded profile exceeds the 4 MB limit.");
     chunks.push(part);
   });
   for (let i = 0; i < bytes.length; i += 256) stream.push(bytes.subarray(i, i + 256), i + 256 >= bytes.length);
@@ -5134,14 +5254,20 @@ function decodeE2(text) {
   }
   let bytes;
   try {
-    bytes = inflateLimited(raw, false);
+    bytes = inflateLimited2(raw, false);
   } catch (e) {
     if (e.message.includes("limit")) throw e;
     try {
-      bytes = inflateLimited(raw, true);
+      bytes = inflateLimited2(raw, true);
     } catch {
       throw Error("Could not decompress this profile. It may be incomplete or use an unsupported format.");
     }
+  }
+  const decoder2 = new Decoder({ mapsAsObjects: false, useRecords: false });
+  try {
+    const profile3 = normalize(decoder2.decode(bytes));
+    if (profile3 instanceof Map) return { name: "Imported profile", profile: profile3, format: "E2" };
+  } catch {
   }
   let marker = -1;
   const suffix = new TextEncoder().encode("::profile::");
@@ -5151,9 +5277,9 @@ function decodeE2(text) {
       break;
     }
   }
-  if (marker < 0) throw Error("Only character profiles are editable. Import a Profile export, not Global, Private, or Filters.");
+  if (marker < 0) throw Error("Could not read this !E2! profile. The data may be incomplete or use an unsupported format.");
   const name2 = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(marker + suffix.length));
-  const profile2 = normalize(new Decoder({ mapsAsObjects: false, useRecords: false }).decode(bytes.subarray(0, marker)));
+  const profile2 = normalize(decoder2.decode(bytes.subarray(0, marker)));
   if (!(profile2 instanceof Map)) throw Error("The profile root must be a table.");
   return { name: name2 || "Imported profile", profile: profile2, format: "E2" };
 }
@@ -5174,9 +5300,9 @@ function exportProfile(profile2, name2, format = "lua") {
 function parseInput(input) {
   const text = input.replace(/^\uFEFF/, "").trim();
   if (!text) throw Error("Paste a profile or choose an ElvUI.lua file.");
-  if (new TextEncoder().encode(text).length > LIMIT) throw Error("The maximum import size is 4 MB.");
+  if (new TextEncoder().encode(text).length > LIMIT2) throw Error("The maximum import size is 4 MB.");
   if (text.startsWith("!E2!")) return { profiles: [decodeE2(text)] };
-  if (text.startsWith("!E1!")) throw Error("Legacy !E1! strings are not supported in this version. Use your local SavedVariables/ElvUI.lua file or an ElvUI Lua table export instead.");
+  if (text.startsWith("!E1!")) return { profiles: [decodeE1(text)] };
   let ast, name2 = "Imported profile";
   let source2 = text;
   if (text.startsWith("{")) {
@@ -5551,18 +5677,18 @@ $("#profile-name").onchange = () => {
 };
 function dialog(html) {
   $("#dialog-body").innerHTML = html;
-  $("#dialog").showModal();
+  if (!$("#dialog").open) $("#dialog").showModal();
 }
 function showHelp() {
-  dialog(`<h2>Your UI, outside the game</h2><p>Import \u2192 arrange \u2192 export. All profile processing happens in your browser. Imported files are not uploaded.</p><p class="notice">WoW: Forever is the intended target. This editor currently uses Retail ElvUI settings. Forever support and in-game round-trip compatibility have not yet been verified.</p><p>Supported inputs: current <code>!E2!</code> profile strings, ElvUI Lua table profile exports, and account <code>SavedVariables/ElvUI.lua</code> files. Legacy <code>!E1!</code> exports need a saved settings file instead.</p><p>Find your backup under your WoW installation \u2192 <code>WTF/Account/&lt;account&gt;/SavedVariables/ElvUI.lua</code>. The game-version folder depends on your installation. Keep the original backup.</p><p>The canvas is approximate. Absent mover positions use this editor\u2019s estimates, not an exact reproduction of ElvUI defaults. Raid groups and unknown movers use placeholder dimensions. Plugins, fonts, textures, private/global settings, and combat behavior are not simulated.</p><p>Viewport and UI scale affect the preview only. Editing a frame by dragging anchors it to the center of UIParent. Unresolved relative anchors are preserved and not moved.</p><p><a href="https://github.com/tukui-org/ElvUI/blob/main/ElvUI/Game/Shared/General/Distributor.lua" target="_blank" rel="noopener">ElvUI import/export source</a> \xB7 <a href="https://github.com/tukui-org/ElvUI/wiki/export" target="_blank" rel="noopener">ElvUI profile guide</a></p>`);
+  dialog(`<h2>Your UI, outside the game</h2><p>Import \u2192 arrange \u2192 export. All profile processing happens in your browser. Imported files are not uploaded.</p><p class="notice">WoW: Forever is the intended target. This editor currently uses Retail ElvUI settings. Forever support and in-game round-trip compatibility have not yet been verified.</p><p>Supported inputs: current <code>!E2!</code> and legacy <code>!E1!</code> character profile strings, ElvUI Lua table profile exports, and account <code>SavedVariables/ElvUI.lua</code> files.</p><p>Find your backup under your WoW installation \u2192 <code>WTF/Account/&lt;account&gt;/SavedVariables/ElvUI.lua</code>. The game-version folder depends on your installation. Keep the original backup.</p><p>The canvas is approximate. Absent mover positions use this editor\u2019s estimates, not an exact reproduction of ElvUI defaults. Raid groups and unknown movers use placeholder dimensions. Plugins, fonts, textures, private/global settings, and combat behavior are not simulated.</p><p>Viewport and UI scale affect the preview only. Editing a frame by dragging anchors it to the center of UIParent. Unresolved relative anchors are preserved and not moved.</p><p><a href="https://github.com/tukui-org/ElvUI/blob/main/ElvUI/Game/Shared/General/Distributor.lua" target="_blank" rel="noopener">ElvUI import/export source</a> \xB7 <a href="https://github.com/tukui-org/ElvUI/wiki/export" target="_blank" rel="noopener">ElvUI profile guide</a></p>`);
 }
 $("#help").onclick = showHelp;
 $("#import").onclick = () => {
-  dialog(`<h2>Bring in your UI</h2><p>Paste an ElvUI profile or choose your saved <code>ElvUI.lua</code> file. Your file stays in this browser.</p><label for="import-text">Profile string or Lua data</label><textarea id="import-text" spellcheck="false" placeholder="!E2!\u2026 or { \u2026 }::profile::My profile"></textarea><label class="import-file">Or choose a saved settings file (up to 4 MB)<input id="import-file" type="file" accept=".lua,.txt"></label><p id="import-error" class="error" role="alert"></p><div id="profile-choice"></div><div class="actions"><button id="read-profile" class="primary">Read profile</button></div>`);
+  dialog(`<h2>Bring in your UI</h2><p>Paste an ElvUI profile or choose your saved <code>ElvUI.lua</code> file. Your file stays in this browser.</p><label for="import-text">Profile string or Lua data</label><textarea id="import-text" spellcheck="false" placeholder="!E1!\u2026 or !E2!\u2026 or { \u2026 }::profile::My profile"></textarea><label class="import-file">Or choose a saved settings file (up to 4 MB)<input id="import-file" type="file" accept=".lua,.txt"></label><p id="import-error" class="error" role="alert"></p><div id="profile-choice"></div><div class="actions"><button id="read-profile" class="primary">Read profile</button></div>`);
   $("#import-file").onchange = async () => {
     const f = $("#import-file").files[0];
     if (!f) return;
-    if (f.size > LIMIT) {
+    if (f.size > LIMIT2) {
       $("#import-error").textContent = "File exceeds the 4 MB limit.";
       return;
     }
@@ -5573,7 +5699,8 @@ $("#import").onclick = () => {
     try {
       const result = parseInput($("#import-text").value);
       $("#import-error").textContent = "";
-      $("#profile-choice").innerHTML = `<label class="field">Choose a profile<select id="choose-profile">${result.profiles.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join("")}</select></label><p class="muted">Loading replaces the working profile. You can undo it.</p><button id="load-profile" class="primary">Load selected profile</button>`;
+      const legacy = result.profiles.length === 1 && result.profiles[0].format === "E1";
+      $("#profile-choice").innerHTML = `<label class="field">Choose a profile<select id="choose-profile">${result.profiles.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join("")}</select></label><p class="muted">Loading replaces the working profile. You can undo it.</p><div class="actions"><button id="load-profile" class="primary">Load selected profile</button>${legacy ? '<button id="upgrade-profile">Upgrade to !E2!</button>' : ""}</div>`;
       $("#load-profile").onclick = () => {
         const p = result.profiles[Number($("#choose-profile").value)];
         mutate(() => {
@@ -5585,6 +5712,7 @@ $("#import").onclick = () => {
         $("#profile-name").value = name;
         $("#dialog").close();
       };
+      if (legacy) $("#upgrade-profile").onclick = () => showUpgrade(result.profiles[0]);
     } catch (e) {
       $("#profile-choice").innerHTML = "";
       $("#import-error").textContent = e.message;
@@ -5598,6 +5726,25 @@ function download(text, filename) {
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1e3);
+}
+function showUpgrade(p) {
+  try {
+    const upgraded = exportProfile(p.profile, p.name, "e2");
+    dialog(`<h2>Classic profile upgraded</h2><p>The <strong>${esc(p.name)}</strong> profile is ready as a current <code>!E2!</code> string. Your working layout and original profile were not changed.</p><p class="notice">In-game import and WoW: Forever compatibility remain unverified. Keep the original profile as a backup.</p><label for="upgraded-text">Upgraded profile</label><textarea id="upgraded-text" readonly spellcheck="false"></textarea><p id="upgrade-error" class="error" role="alert"></p><div class="actions"><button id="download-upgrade">Download .txt</button><button id="copy-upgrade" class="primary">Copy profile</button></div>`);
+    $("#upgraded-text").value = upgraded;
+    $("#download-upgrade").onclick = () => download(upgraded, p.name.replace(/[^a-z0-9_-]/gi, "_") + "-upgraded-E2.txt");
+    $("#copy-upgrade").onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(upgraded);
+        $("#copy-upgrade").textContent = "Copied";
+      } catch {
+        $("#upgraded-text").select();
+        $("#upgrade-error").textContent = "Clipboard access is unavailable. Select and copy the text manually.";
+      }
+    };
+  } catch (e) {
+    $("#import-error").textContent = e.message;
+  }
 }
 $("#export").onclick = () => {
   if (!applyProperties()) return;
