@@ -74,6 +74,8 @@ npm run dev
 
 Open [http://127.0.0.1:5173/](http://127.0.0.1:5173/). Static deployment serves the `dist/` directory; no server-side profile processing is required.
 
+Render deployment is defined in `render.yaml` as a static site. It builds with `npm ci && npm run build`, publishes `dist/`, deploys after GitHub checks pass, and applies basic browser security headers.
+
 The project uses vanilla JavaScript and CSS, [esbuild](https://esbuild.github.io/), [luaparse](https://github.com/fstirlitz/luaparse), [cbor-x](https://github.com/kriszyp/cbor-x), and [fflate](https://github.com/101arrowz/fflate).
 
 ## Project status
