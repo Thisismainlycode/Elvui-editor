@@ -24,7 +24,7 @@ function render(){
  if(f.kind==='bar'){const n=Math.max(1,Math.min(12,Number(get(profile,[...f.path,'buttons'],12))||12)),cols=Math.max(1,Math.min(12,Number(get(profile,[...f.path,'buttonsPerRow'],12))||12));body=Array.from({length:n},(_,i)=>`<span class="slot">${i<9?i+1:i===9?'0':i===10?'-':'='}</span>`).join('');style+=`grid-template-columns:repeat(${Math.min(cols,n)},1fr);grid-template-rows:repeat(${Math.ceil(n/cols)},1fr);`;}
  if(f.kind==='raid')body=Array.from({length:25},()=>'<span class="raid-cell"></span>').join('');
  if(['chat','minimap','unknown'].includes(f.kind))body=`<span class="frame-text">${esc(f.label)}</span>`;
- return `<button class="frame ${f.kind} ${f.resize&&f.kind!=='minimap'?'power':''} ${f.id===selected?'selected':''}" data-id="${esc(f.id)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id===selected&&f.resize?'<span class="handle" aria-hidden="true"></span>':''}</button>`;
+ return `<button class="frame ${f.kind} ${f.resize&&f.kind!=='minimap'?'power':''} ${f.id===selected?'selected':''}" data-id="${esc(f.id)}" data-label="${esc(f.label)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id===selected&&f.resize?'<span class="handle" aria-hidden="true"></span>':''}</button>`;
  }).join('');renderProperties();
 }
 const field=(label,id,value,min=-99999,max=99999)=>`<label class="field">${label}<input id="${id}" type="number" min="${min}" max="${max}" step="1" value="${Number(value)}" required></label>`;

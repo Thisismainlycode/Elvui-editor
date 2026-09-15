@@ -5544,7 +5544,7 @@ function render() {
     }
     if (f.kind === "raid") body = Array.from({ length: 25 }, () => '<span class="raid-cell"></span>').join("");
     if (["chat", "minimap", "unknown"].includes(f.kind)) body = `<span class="frame-text">${esc(f.label)}</span>`;
-    return `<button class="frame ${f.kind} ${f.resize && f.kind !== "minimap" ? "power" : ""} ${f.id === selected ? "selected" : ""}" data-id="${esc(f.id)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id === selected && f.resize ? '<span class="handle" aria-hidden="true"></span>' : ""}</button>`;
+    return `<button class="frame ${f.kind} ${f.resize && f.kind !== "minimap" ? "power" : ""} ${f.id === selected ? "selected" : ""}" data-id="${esc(f.id)}" data-label="${esc(f.label)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id === selected && f.resize ? '<span class="handle" aria-hidden="true"></span>' : ""}</button>`;
   }).join("");
   renderProperties();
 }
