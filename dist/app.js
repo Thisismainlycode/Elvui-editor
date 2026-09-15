@@ -5344,7 +5344,7 @@ function parseInput(input) {
 var ANCHORS = ["TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"];
 var unit = (id, label, mover, x, y, w = 270, h = 54) => ({ id, label, mover, kind: id, path: ["unitframe", "units", id], w, h, x, y, resize: true, enable: true });
 var DEFAULT_ENABLED_BARS = /* @__PURE__ */ new Set([1, 3, 4, 5]);
-var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 406, h: 32, enable: true, enableKey: "enabled", defaultEnabled: DEFAULT_ENABLED_BARS.has(n), defaultButtons: n === 3 || n === 5 ? 6 : 12, defaultCols: n === 4 ? 1 : n === 3 || n === 5 ? 6 : 12 });
+var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 406, h: 32, enable: true, enableKey: "enabled", defaultEnabled: DEFAULT_ENABLED_BARS.has(n), defaultButtons: n === 3 || n === 5 ? 6 : 12, defaultCols: n === 4 ? 1 : n === 3 || n === 5 ? 6 : 12, defaultBackdrop: n === 4 });
 var ACTION_BAR_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15];
 var BASE_DEFINITIONS = [unit("player", "Player", "ElvUF_PlayerMover", -320, -180), unit("target", "Target", "ElvUF_TargetMover", 320, -180), unit("focus", "Focus", "ElvUF_FocusMover", -320, -95, 180, 36), unit("pet", "Pet", "ElvUF_PetMover", -320, -250, 180, 30), bar(1), bar(2, 0, -326), { id: "minimap", label: "Minimap", mover: "MinimapMover", kind: "minimap", path: ["general", "minimap"], x: 805, y: 380, w: 170, h: 170, resize: true }, { id: "leftchat", label: "Left chat", mover: "LeftChatMover", kind: "chat", x: -725, y: -355, w: 400, h: 180 }, { id: "rightchat", label: "Right chat", mover: "RightChatMover", kind: "chat", x: 725, y: -355, w: 400, h: 180 }, { id: "raid1", label: "Raid group", mover: "ElvUF_Raid1Mover", kind: "raid", path: ["unitframe", "units", "raid1"], x: -745, y: 0, w: 300, h: 190 }];
 var DEFINITIONS = [...BASE_DEFINITIONS];
@@ -5381,8 +5381,8 @@ function parseMover(value) {
   return { anchor, parent, relative, x: Number(x), y: Number(y) };
 }
 function actionBarLayout(p, d) {
-  const path = d.path, n = get(p, [...path, "buttons"], d.defaultButtons), cols = Math.max(1, Math.min(n, get(p, [...path, "buttonsPerRow"], d.defaultCols))), size = get(p, [...path, "buttonSize"], 32), height = get(p, [...path, "keepSizeRatio"], true) === false ? get(p, [...path, "buttonHeight"], 32) : size, gap = get(p, [...path, "buttonSpacing"], 2), rows = Math.ceil(n / cols);
-  return { n, cols, size, height, gap, rows, w: cols * size + (cols - 1) * gap, h: rows * height + (rows - 1) * gap };
+  const path = d.path, n = get(p, [...path, "buttons"], d.defaultButtons), cols = Math.max(1, Math.min(n, get(p, [...path, "buttonsPerRow"], d.defaultCols))), size = get(p, [...path, "buttonSize"], 32), height = get(p, [...path, "keepSizeRatio"], true) === false ? get(p, [...path, "buttonHeight"], 32) : size, gap = get(p, [...path, "buttonSpacing"], 2), rows = Math.ceil(n / cols), w = cols * size + (cols - 1) * gap, h = rows * height + (rows - 1) * gap, backdrop = get(p, [...path, "backdrop"], d.defaultBackdrop ?? false), inset = backdrop ? get(p, [...path, "backdropSpacing"], 2) : 0;
+  return { n, cols, size, height, gap, rows, w, h, backdrop, inset, moverW: w + inset * 2, moverH: h + inset * 2 };
 }
 function dimensions(p, d) {
   let w = d.w, h = d.h;
@@ -5409,12 +5409,12 @@ function framesFor(p, viewport2) {
     for (const [m] of movers) if (typeof m === "string" && !defs.some((d) => d.mover === m)) defs.push({ id: m, label: m, kind: "unknown", mover: m, w: 160, h: 40, x: 0, y: 0 });
   }
   const frames2 = defs.map((d) => {
-    const raw = get(p, ["movers", d.mover]);
-    return { ...d, ...dimensions(p, d), enabled: d.enable ? get(p, [...d.path, d.enableKey || "enable"], d.defaultEnabled ?? true) !== false : true, moverData: parseMover(raw), raw, estimated: raw === void 0 };
+    const raw = get(p, ["movers", d.mover]), dims = dimensions(p, d), layout = d.kind === "bar" ? actionBarLayout(p, d) : null;
+    return { ...d, ...dims, moverW: layout?.moverW ?? dims.w, moverH: layout?.moverH ?? dims.h, inset: layout?.inset ?? 0, enabled: d.enable ? get(p, [...d.path, d.enableKey || "enable"], d.defaultEnabled ?? true) !== false : true, moverData: parseMover(raw), raw, estimated: raw === void 0 };
   });
   const roots = ["UIParent", "ElvUIParent"];
   function resolve(f, seen = /* @__PURE__ */ new Set()) {
-    if (f.rect) return f.rect;
+    if (f.anchorRect) return f.anchorRect;
     if (seen.has(f.id)) {
       f.warning = "Circular relative anchor; position editing is unavailable.";
       return null;
@@ -5438,9 +5438,10 @@ function framesFor(p, viewport2) {
       f.warning = f.warning || `Relative frame ${m.parent} cannot be previewed. Position is retained.`;
       return null;
     }
-    const a = anchorFraction(m.anchor), b = anchorFraction(m.relative);
-    f.rect = { left: parent.left + parent.w * b[0] + m.x - f.w * a[0], top: parent.top + parent.h * b[1] - m.y - f.h * a[1], w: f.w, h: f.h };
-    return f.rect;
+    const a = anchorFraction(m.anchor), b = anchorFraction(m.relative), left = parent.left + parent.w * b[0] + m.x - f.moverW * a[0], top = parent.top + parent.h * b[1] - m.y - f.moverH * a[1];
+    f.anchorRect = { left, top, w: f.moverW, h: f.moverH };
+    f.rect = { left: left + f.inset, top: top + f.inset, w: f.w, h: f.h };
+    return f.anchorRect;
   }
   for (const f of frames2) resolve(f);
   return frames2;
