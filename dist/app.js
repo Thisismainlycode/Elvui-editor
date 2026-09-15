@@ -5343,7 +5343,8 @@ function parseInput(input) {
 // src/model.js
 var ANCHORS = ["TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"];
 var unit = (id, label, mover, x, y, w = 270, h = 54) => ({ id, label, mover, kind: id, path: ["unitframe", "units", id], w, h, x, y, resize: true, enable: true });
-var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 430, h: 34, enable: true, enableKey: "enabled" });
+var DEFAULT_ENABLED_BARS = /* @__PURE__ */ new Set([1, 3, 4, 5]);
+var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 430, h: 34, enable: true, enableKey: "enabled", defaultEnabled: DEFAULT_ENABLED_BARS.has(n) });
 var ACTION_BAR_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15];
 var BASE_DEFINITIONS = [unit("player", "Player", "ElvUF_PlayerMover", -320, -180), unit("target", "Target", "ElvUF_TargetMover", 320, -180), unit("focus", "Focus", "ElvUF_FocusMover", -320, -95, 180, 36), unit("pet", "Pet", "ElvUF_PetMover", -320, -250, 180, 30), bar(1), bar(2, 0, -326), { id: "minimap", label: "Minimap", mover: "MinimapMover", kind: "minimap", path: ["general", "minimap"], x: 805, y: 380, w: 170, h: 170, resize: true }, { id: "leftchat", label: "Left chat", mover: "LeftChatMover", kind: "chat", x: -725, y: -355, w: 400, h: 180 }, { id: "rightchat", label: "Right chat", mover: "RightChatMover", kind: "chat", x: 725, y: -355, w: 400, h: 180 }, { id: "raid1", label: "Raid group", mover: "ElvUF_Raid1Mover", kind: "raid", path: ["unitframe", "units", "raid1"], x: -745, y: 0, w: 300, h: 190 }];
 var DEFINITIONS = [...BASE_DEFINITIONS];
@@ -5408,7 +5409,7 @@ function framesFor(p, viewport2) {
   }
   const frames2 = defs.map((d) => {
     const raw = get(p, ["movers", d.mover]);
-    return { ...d, ...dimensions(p, d), enabled: d.enable ? get(p, [...d.path, d.enableKey || "enable"], true) !== false : true, moverData: parseMover(raw), raw, estimated: raw === void 0 };
+    return { ...d, ...dimensions(p, d), enabled: d.enable ? get(p, [...d.path, d.enableKey || "enable"], d.defaultEnabled ?? true) !== false : true, moverData: parseMover(raw), raw, estimated: raw === void 0 };
   });
   const roots = ["UIParent", "ElvUIParent"];
   function resolve(f, seen = /* @__PURE__ */ new Set()) {

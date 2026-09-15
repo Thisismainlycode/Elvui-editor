@@ -1,7 +1,8 @@
 import {get,set,clone} from './profile.js';
 export const ANCHORS=['TOPLEFT','TOP','TOPRIGHT','LEFT','CENTER','RIGHT','BOTTOMLEFT','BOTTOM','BOTTOMRIGHT'];
 const unit=(id,label,mover,x,y,w=270,h=54)=>({id,label,mover,kind:id,path:['unitframe','units',id],w,h,x,y,resize:true,enable:true});
-const bar=(n,x=0,y=-370)=>({id:`bar${n}`,label:`Action bar ${n}`,mover:`ElvAB_${n}`,kind:'bar',path:['actionbar',`bar${n}`],x,y,w:430,h:34,enable:true,enableKey:'enabled'});
+const DEFAULT_ENABLED_BARS=new Set([1,3,4,5]);
+const bar=(n,x=0,y=-370)=>({id:`bar${n}`,label:`Action bar ${n}`,mover:`ElvAB_${n}`,kind:'bar',path:['actionbar',`bar${n}`],x,y,w:430,h:34,enable:true,enableKey:'enabled',defaultEnabled:DEFAULT_ENABLED_BARS.has(n)});
 export const ACTION_BAR_IDS=[1,2,3,4,5,6,7,8,9,10,13,14,15];
 const BASE_DEFINITIONS=[unit('player','Player','ElvUF_PlayerMover',-320,-180),unit('target','Target','ElvUF_TargetMover',320,-180),unit('focus','Focus','ElvUF_FocusMover',-320,-95,180,36),unit('pet','Pet','ElvUF_PetMover',-320,-250,180,30),bar(1),bar(2,0,-326),{id:'minimap',label:'Minimap',mover:'MinimapMover',kind:'minimap',path:['general','minimap'],x:805,y:380,w:170,h:170,resize:true},{id:'leftchat',label:'Left chat',mover:'LeftChatMover',kind:'chat',x:-725,y:-355,w:400,h:180},{id:'rightchat',label:'Right chat',mover:'RightChatMover',kind:'chat',x:725,y:-355,w:400,h:180},{id:'raid1',label:'Raid group',mover:'ElvUF_Raid1Mover',kind:'raid',path:['unitframe','units','raid1'],x:-745,y:0,w:300,h:190}];
 export const DEFINITIONS=[...BASE_DEFINITIONS];
@@ -18,7 +19,7 @@ export function dimensions(p,d){
 }
 export function framesFor(p,viewport){
  const defs=[...DEFINITIONS],movers=get(p,['movers']);for(const n of ACTION_BAR_IDS.slice(2)){const d=bar(n,n===4?900:n>=6?850:0,n===3?-280:n===4?0:n===5?-370:140+(n-6)*38);if(get(p,d.path)instanceof Map||get(p,['movers',d.mover])!==undefined)defs.splice(4+n,0,d);}if(movers instanceof Map)for(const [m]of movers)if(typeof m==='string'&&!defs.some(d=>d.mover===m))defs.push({id:m,label:m,kind:'unknown',mover:m,w:160,h:40,x:0,y:0});
- const frames=defs.map(d=>{const raw=get(p,['movers',d.mover]);return {...d,...dimensions(p,d),enabled:d.enable?get(p,[...d.path,d.enableKey||'enable'],true)!==false:true,moverData:parseMover(raw),raw,estimated:raw===undefined};});
+ const frames=defs.map(d=>{const raw=get(p,['movers',d.mover]);return {...d,...dimensions(p,d),enabled:d.enable?get(p,[...d.path,d.enableKey||'enable'],d.defaultEnabled??true)!==false:true,moverData:parseMover(raw),raw,estimated:raw===undefined};});
  const roots=['UIParent','ElvUIParent'];
  function resolve(f,seen=new Set()){
   if(f.rect)return f.rect;if(seen.has(f.id)){f.warning='Circular relative anchor; position editing is unavailable.';return null;}seen.add(f.id);
