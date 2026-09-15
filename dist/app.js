@@ -5521,6 +5521,7 @@ function render() {
   $("#redo").disabled = !future.length;
   $("#layers").innerHTML = frames.map((f) => `<button class="layer ${f.id === selected ? "active" : ""}" data-id="${esc(f.id)}" aria-pressed="${f.id === selected}"><span>${esc(f.label)}</span><small>${f.warning ? "!" : f.enabled ? "\u25C7" : "off"}</small></button>`).join("");
   $("#stage").style.aspectRatio = `${view.w}/${view.h}`;
+  $("#stage").style.width = `${$("#canvas-zoom").value}%`;
   $("#stage").classList.toggle("no-grid", !$("#grid").checked);
   $("#frames").innerHTML = frames.filter((f) => f.rect).map((f) => {
     let body = `<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
@@ -5660,6 +5661,12 @@ $("#grid").onchange = render;
 $("#resolution").onchange = () => {
   render();
   status("Preview viewport updated; profile settings are unchanged");
+};
+$("#canvas-zoom").onchange = () => {
+  const wrap = $(".stage-wrap");
+  render();
+  wrap.scrollTo({ left: (wrap.scrollWidth - wrap.clientWidth) / 2, top: (wrap.scrollHeight - wrap.clientHeight) / 2, behavior: "smooth" });
+  status(`Canvas zoom set to ${$("#canvas-zoom").value}%; profile settings are unchanged`);
 };
 $("#ui-scale").onchange = () => {
   if (!$("#ui-scale").checkValidity() || !Number($("#ui-scale").value)) $("#ui-scale").value = "0.71";

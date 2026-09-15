@@ -16,7 +16,7 @@ function render(){
  const view=viewport();frames=framesFor(profile,view);if(!selectedFrame())selected=frames[0].id;
  $('#count').textContent=`${frames.length} frames`;$('#profile-status').textContent=source+(dirty?' · Edited':'');$('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
  $('#layers').innerHTML=frames.map(f=>`<button class="layer ${f.id===selected?'active':''}" data-id="${esc(f.id)}" aria-pressed="${f.id===selected}"><span>${esc(f.label)}</span><small>${f.warning?'!':f.enabled?'◇':'off'}</small></button>`).join('');
- $('#stage').style.aspectRatio=`${view.w}/${view.h}`;$('#stage').classList.toggle('no-grid',!$('#grid').checked);
+ $('#stage').style.aspectRatio=`${view.w}/${view.h}`;$('#stage').style.width=`${$('#canvas-zoom').value}%`;$('#stage').classList.toggle('no-grid',!$('#grid').checked);
  $('#frames').innerHTML=frames.filter(f=>f.rect).map(f=>{
  let body=`<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
  let style=`left:${f.rect.left/view.w*100}%;top:${f.rect.top/view.h*100}%;width:${f.w/view.w*100}%;height:${f.h/view.h*100}%;opacity:${f.enabled?1:.32};`;
@@ -75,6 +75,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drag){finishDrag(tr
  if(e.target.closest('#frames')&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();const f=selectedFrame();if(!f?.rect)return;const n=e.shiftKey?10:1;mutate(()=>moveFrame(profile,f,f.rect.left+(e.key==='ArrowLeft'?-n:e.key==='ArrowRight'?n:0),f.rect.top+(e.key==='ArrowUp'?-n:e.key==='ArrowDown'?n:0),viewport()),`${f.label} nudged`);focusFrame();}});
 $('#undo').onclick=undo;$('#redo').onclick=redo;
 $('#grid').onchange=render;$('#resolution').onchange=()=>{render();status('Preview viewport updated; profile settings are unchanged');};
+$('#canvas-zoom').onchange=()=>{const wrap=$('.stage-wrap');render();wrap.scrollTo({left:(wrap.scrollWidth-wrap.clientWidth)/2,top:(wrap.scrollHeight-wrap.clientHeight)/2,behavior:'smooth'});status(`Canvas zoom set to ${$('#canvas-zoom').value}%; profile settings are unchanged`);};
 $('#ui-scale').onchange=()=>{if(!$('#ui-scale').checkValidity()||!Number($('#ui-scale').value))$('#ui-scale').value='0.71';render();status('Preview scale updated; match this to your in-game UI scale');};
 $('#profile-name').onchange=()=>{const next=$('#profile-name').value.trim();if(!next||/[\x00-\x1f:]/.test(next)){status('Profile names cannot be empty or contain colons.');$('#profile-name').value=name;return;}mutate(()=>name=next,'Profile renamed');};
 function dialog(html){$('#dialog-body').innerHTML=html;if(!$('#dialog').open)$('#dialog').showModal();}
