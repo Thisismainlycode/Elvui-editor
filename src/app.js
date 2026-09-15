@@ -17,7 +17,7 @@ function render(){
  const showUnsupported=$('#show-unsupported').checked,unsupported=frames.filter(f=>f.kind==='unknown'),visible=showUnsupported?frames:frames.filter(f=>f.kind!=='unknown');if(!visible.some(f=>f.id===selected))selected=visible[0]?.id||frames[0].id;
  const active=visible.filter(f=>f.enabled),off=visible.length-active.length;$('#count').textContent=`${active.length} visible${off?` · ${off} off`:''}${unsupported.length&&!showUnsupported?` · ${unsupported.length} preserved`:''}`;$('#profile-status').textContent=source+(dirty?' · Edited':'');$('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
  $('#layers').innerHTML=visible.map(f=>`<button class="layer ${f.id===selected?'active':''}" data-id="${esc(f.id)}" aria-pressed="${f.id===selected}"><span>${esc(f.label)}</span><small>${f.warning?'!':f.enabled?'◇':'off'}</small></button>`).join('');
- $('#stage').style.aspectRatio=`${view.w}/${view.h}`;$('#stage').style.width=`${$('#canvas-zoom').value}%`;$('#stage').classList.toggle('no-grid',!$('#grid').checked);
+ $('#stage').style.aspectRatio=`${view.w}/${view.h}`;$('#stage').style.width=`${$('#canvas-zoom').value}%`;$('#stage').style.backgroundSize=`${40/view.w*100}% ${40/view.h*100}%`;$('#stage').classList.toggle('no-grid',!$('#grid').checked);
  $('#frames').innerHTML=active.filter(f=>f.rect).map(f=>{
  let body=`<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
  let style=`left:${f.rect.left/view.w*100}%;top:${f.rect.top/view.h*100}%;width:${f.w/view.w*100}%;height:${f.h/view.h*100}%;opacity:${f.enabled?1:.32};`;
@@ -65,7 +65,7 @@ $('#frames').addEventListener('pointerdown',e=>{
 $('#stage').addEventListener('pointermove',e=>{
  if(!drag)return;const rect=$('#stage').getBoundingClientRect(),v=viewport(),dx=(e.clientX-drag.startX)/rect.width*v.w,dy=(e.clientY-drag.startY)/rect.height*v.h;
  if(!drag.moved&&Math.abs(dx)+Math.abs(dy)<3)return;if(!drag.moved){pushHistory();drag.moved=true;}
- const snap=n=>$('#grid').checked?Math.round(n/4)*4:Math.round(n),f=drag.frame;
+ const snap=n=>$('#snap').checked?Math.round(n/4)*4:Math.round(n),f=drag.frame;
  try{if(drag.resize)resizeFrame(profile,f,Math.max(10,Math.min(2000,snap(f.w+dx))),Math.max(10,Math.min(2000,snap(f.h+dy))));else moveFrame(profile,f,snap(f.rect.left+dx),snap(f.rect.top+dy),v);render();}catch(err){status(err.message);}
 });
 function focusFrame(){document.querySelector(`#frames [data-id="${CSS.escape(selected)}"]`)?.focus({preventScroll:true});}
@@ -75,7 +75,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drag){finishDrag(tr
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
  if(e.target.closest('#frames')&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();const f=selectedFrame();if(!f?.rect)return;const n=e.shiftKey?10:1;mutate(()=>moveFrame(profile,f,f.rect.left+(e.key==='ArrowLeft'?-n:e.key==='ArrowRight'?n:0),f.rect.top+(e.key==='ArrowUp'?-n:e.key==='ArrowDown'?n:0),viewport()),`${f.label} nudged`);focusFrame();}});
 $('#undo').onclick=undo;$('#redo').onclick=redo;
-$('#grid').onchange=render;$('#show-unsupported').onchange=()=>{render();status($('#show-unsupported').checked?'Unsupported anchors shown as approximate placeholders':'Unsupported anchors hidden; their profile data is still preserved');};$('#resolution').onchange=()=>{render();status('Preview viewport updated; profile settings are unchanged');};
+$('#grid').onchange=render;$('#snap').onchange=()=>status($('#snap').checked?'4-unit snapping enabled for dragging and resizing':'Snapping disabled; imported coordinates are unchanged');$('#show-unsupported').onchange=()=>{render();status($('#show-unsupported').checked?'Unsupported anchors shown as approximate placeholders':'Unsupported anchors hidden; their profile data is still preserved');};$('#resolution').onchange=()=>{render();status('Preview viewport updated; profile settings are unchanged');};
 $('#canvas-zoom').onchange=()=>{const wrap=$('.stage-wrap');render();wrap.scrollTo({left:(wrap.scrollWidth-wrap.clientWidth)/2,top:(wrap.scrollHeight-wrap.clientHeight)/2,behavior:'smooth'});status(`Canvas zoom set to ${$('#canvas-zoom').value}%; profile settings are unchanged`);};
 $('#ui-scale').onchange=()=>{if(!$('#ui-scale').checkValidity()||!Number($('#ui-scale').value))$('#ui-scale').value='0.71';render();status('Preview scale updated; match this to your in-game UI scale');};
 $('#profile-name').onchange=()=>{const next=$('#profile-name').value.trim();if(!next||/[\x00-\x1f:]/.test(next)){status('Profile names cannot be empty or contain colons.');$('#profile-name').value=name;return;}mutate(()=>name=next,'Profile renamed');};

@@ -5344,7 +5344,7 @@ function parseInput(input) {
 var ANCHORS = ["TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"];
 var unit = (id, label, mover, x, y, w = 270, h = 54) => ({ id, label, mover, kind: id, path: ["unitframe", "units", id], w, h, x, y, resize: true, enable: true });
 var DEFAULT_ENABLED_BARS = /* @__PURE__ */ new Set([1, 3, 4, 5]);
-var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 430, h: 34, enable: true, enableKey: "enabled", defaultEnabled: DEFAULT_ENABLED_BARS.has(n) });
+var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 406, h: 32, enable: true, enableKey: "enabled", defaultEnabled: DEFAULT_ENABLED_BARS.has(n), defaultButtons: n === 3 || n === 5 ? 6 : 12, defaultCols: n === 4 ? 1 : n === 3 || n === 5 ? 6 : 12 });
 var ACTION_BAR_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15];
 var BASE_DEFINITIONS = [unit("player", "Player", "ElvUF_PlayerMover", -320, -180), unit("target", "Target", "ElvUF_TargetMover", 320, -180), unit("focus", "Focus", "ElvUF_FocusMover", -320, -95, 180, 36), unit("pet", "Pet", "ElvUF_PetMover", -320, -250, 180, 30), bar(1), bar(2, 0, -326), { id: "minimap", label: "Minimap", mover: "MinimapMover", kind: "minimap", path: ["general", "minimap"], x: 805, y: 380, w: 170, h: 170, resize: true }, { id: "leftchat", label: "Left chat", mover: "LeftChatMover", kind: "chat", x: -725, y: -355, w: 400, h: 180 }, { id: "rightchat", label: "Right chat", mover: "RightChatMover", kind: "chat", x: 725, y: -355, w: 400, h: 180 }, { id: "raid1", label: "Raid group", mover: "ElvUF_Raid1Mover", kind: "raid", path: ["unitframe", "units", "raid1"], x: -745, y: 0, w: 300, h: 190 }];
 var DEFINITIONS = [...BASE_DEFINITIONS];
@@ -5361,9 +5361,9 @@ function newProfile() {
       }
     }
     if (d.kind === "bar") {
-      set(p, [...d.path, "buttons"], 12);
-      set(p, [...d.path, "buttonsPerRow"], 12);
-      set(p, [...d.path, "buttonSize"], 34);
+      set(p, [...d.path, "buttons"], d.defaultButtons);
+      set(p, [...d.path, "buttonsPerRow"], d.defaultCols);
+      set(p, [...d.path, "buttonSize"], 32);
       set(p, [...d.path, "buttonSpacing"], 2);
     }
   }
@@ -5384,7 +5384,7 @@ function dimensions(p, d) {
   let w = d.w, h = d.h;
   let path = d.path;
   if (d.kind === "bar") {
-    const n = get(p, [...path, "buttons"], 12), cols = get(p, [...path, "buttonsPerRow"], 12), size = get(p, [...path, "buttonSize"], 34), height = get(p, [...path, "keepSizeRatio"], true) === false ? get(p, [...path, "buttonHeight"], size) : size, gap = get(p, [...path, "buttonSpacing"], 2);
+    const n = get(p, [...path, "buttons"], d.defaultButtons), cols = get(p, [...path, "buttonsPerRow"], d.defaultCols), size = get(p, [...path, "buttonSize"], 32), height = get(p, [...path, "keepSizeRatio"], true) === false ? get(p, [...path, "buttonHeight"], 32) : size, gap = get(p, [...path, "buttonSpacing"], 2);
     w = Math.min(n, cols) * size + (Math.min(n, cols) - 1) * gap;
     h = Math.ceil(n / cols) * height + (Math.ceil(n / cols) - 1) * gap;
   } else if (d.kind === "minimap") w = h = get(p, [...path, "size"], 170);
@@ -5532,6 +5532,7 @@ function render() {
   $("#layers").innerHTML = visible.map((f) => `<button class="layer ${f.id === selected ? "active" : ""}" data-id="${esc(f.id)}" aria-pressed="${f.id === selected}"><span>${esc(f.label)}</span><small>${f.warning ? "!" : f.enabled ? "\u25C7" : "off"}</small></button>`).join("");
   $("#stage").style.aspectRatio = `${view.w}/${view.h}`;
   $("#stage").style.width = `${$("#canvas-zoom").value}%`;
+  $("#stage").style.backgroundSize = `${40 / view.w * 100}% ${40 / view.h * 100}%`;
   $("#stage").classList.toggle("no-grid", !$("#grid").checked);
   $("#frames").innerHTML = active.filter((f) => f.rect).map((f) => {
     let body = `<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
@@ -5617,7 +5618,7 @@ $("#stage").addEventListener("pointermove", (e) => {
     pushHistory();
     drag.moved = true;
   }
-  const snap = (n) => $("#grid").checked ? Math.round(n / 4) * 4 : Math.round(n), f = drag.frame;
+  const snap = (n) => $("#snap").checked ? Math.round(n / 4) * 4 : Math.round(n), f = drag.frame;
   try {
     if (drag.resize) resizeFrame(profile, f, Math.max(10, Math.min(2e3, snap(f.w + dx))), Math.max(10, Math.min(2e3, snap(f.h + dy))));
     else moveFrame(profile, f, snap(f.rect.left + dx), snap(f.rect.top + dy), v);
@@ -5668,6 +5669,7 @@ document.addEventListener("keydown", (e) => {
 $("#undo").onclick = undo;
 $("#redo").onclick = redo;
 $("#grid").onchange = render;
+$("#snap").onchange = () => status($("#snap").checked ? "4-unit snapping enabled for dragging and resizing" : "Snapping disabled; imported coordinates are unchanged");
 $("#show-unsupported").onchange = () => {
   render();
   status($("#show-unsupported").checked ? "Unsupported anchors shown as approximate placeholders" : "Unsupported anchors hidden; their profile data is still preserved");
