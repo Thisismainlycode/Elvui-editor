@@ -1,5 +1,5 @@
 import {parseInput,exportProfile,LIMIT} from './profile.js';
-import {newProfile,framesFor,moveFrame,resizeFrame,get,set,clone,ANCHORS} from './model.js';
+import {newProfile,framesFor,moveFrame,resizeFrame,actionBarLayout,get,set,clone,ANCHORS} from './model.js';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let profile=newProfile(),name='My next adventure',selected='player',source='New layout',dirty=false,history=[],future=[],frames=[],drag=null,applyProperties=()=>true;
@@ -21,7 +21,7 @@ function render(){
  $('#frames').innerHTML=active.filter(f=>f.rect).map(f=>{
  let body=`<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
  let style=`left:${f.rect.left/view.w*100}%;top:${f.rect.top/view.h*100}%;width:${f.w/view.w*100}%;height:${f.h/view.h*100}%;opacity:${f.enabled?1:.32};`;
- if(f.kind==='bar'){const n=Math.max(1,Math.min(12,Number(get(profile,[...f.path,'buttons'],12))||12)),cols=Math.max(1,Math.min(12,Number(get(profile,[...f.path,'buttonsPerRow'],12))||12));body=Array.from({length:n},(_,i)=>`<span class="slot">${i<9?i+1:i===9?'0':i===10?'-':'='}</span>`).join('');style+=`grid-template-columns:repeat(${Math.min(cols,n)},1fr);grid-template-rows:repeat(${Math.ceil(n/cols)},1fr);`;}
+ if(f.kind==='bar'){const {n,cols,rows}=actionBarLayout(profile,f);body=Array.from({length:n},(_,i)=>`<span class="slot">${i<9?i+1:i===9?'0':i===10?'-':'='}</span>`).join('');style+=`grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`;}
  if(f.kind==='raid')body=Array.from({length:25},()=>'<span class="raid-cell"></span>').join('');
  if(['chat','minimap','unknown'].includes(f.kind))body=`<span class="frame-text">${esc(f.label)}</span>`;
  return `<button class="frame ${f.kind} ${f.resize&&f.kind!=='minimap'?'power':''} ${f.id===selected?'selected':''}" data-id="${esc(f.id)}" data-label="${esc(f.label)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id===selected&&f.resize?'<span class="handle" aria-hidden="true"></span>':''}</button>`;

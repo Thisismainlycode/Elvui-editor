@@ -5380,14 +5380,15 @@ function parseMover(value) {
   if (rest.length || !ANCHORS.includes(anchor) || !ANCHORS.includes(relative) || !parent || !Number.isFinite(Number(x)) || !Number.isFinite(Number(y))) return null;
   return { anchor, parent, relative, x: Number(x), y: Number(y) };
 }
+function actionBarLayout(p, d) {
+  const path = d.path, n = get(p, [...path, "buttons"], d.defaultButtons), cols = Math.max(1, Math.min(n, get(p, [...path, "buttonsPerRow"], d.defaultCols))), size = get(p, [...path, "buttonSize"], 32), height = get(p, [...path, "keepSizeRatio"], true) === false ? get(p, [...path, "buttonHeight"], 32) : size, gap = get(p, [...path, "buttonSpacing"], 2), rows = Math.ceil(n / cols);
+  return { n, cols, size, height, gap, rows, w: cols * size + (cols - 1) * gap, h: rows * height + (rows - 1) * gap };
+}
 function dimensions(p, d) {
   let w = d.w, h = d.h;
   let path = d.path;
-  if (d.kind === "bar") {
-    const n = get(p, [...path, "buttons"], d.defaultButtons), cols = get(p, [...path, "buttonsPerRow"], d.defaultCols), size = get(p, [...path, "buttonSize"], 32), height = get(p, [...path, "keepSizeRatio"], true) === false ? get(p, [...path, "buttonHeight"], 32) : size, gap = get(p, [...path, "buttonSpacing"], 2);
-    w = Math.min(n, cols) * size + (Math.min(n, cols) - 1) * gap;
-    h = Math.ceil(n / cols) * height + (Math.ceil(n / cols) - 1) * gap;
-  } else if (d.kind === "minimap") w = h = get(p, [...path, "size"], 170);
+  if (d.kind === "bar") ({ w, h } = actionBarLayout(p, d));
+  else if (d.kind === "minimap") w = h = get(p, [...path, "size"], 170);
   else if (d.kind === "chat") {
     const right = d.id === "rightchat" && get(p, ["chat", "separateSizes"], false);
     w = get(p, ["chat", right ? "panelWidthRight" : "panelWidth"], 400);
@@ -5538,9 +5539,9 @@ function render() {
     let body = `<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
     let style = `left:${f.rect.left / view.w * 100}%;top:${f.rect.top / view.h * 100}%;width:${f.w / view.w * 100}%;height:${f.h / view.h * 100}%;opacity:${f.enabled ? 1 : 0.32};`;
     if (f.kind === "bar") {
-      const n = Math.max(1, Math.min(12, Number(get(profile, [...f.path, "buttons"], 12)) || 12)), cols = Math.max(1, Math.min(12, Number(get(profile, [...f.path, "buttonsPerRow"], 12)) || 12));
+      const { n, cols, rows } = actionBarLayout(profile, f);
       body = Array.from({ length: n }, (_, i) => `<span class="slot">${i < 9 ? i + 1 : i === 9 ? "0" : i === 10 ? "-" : "="}</span>`).join("");
-      style += `grid-template-columns:repeat(${Math.min(cols, n)},1fr);grid-template-rows:repeat(${Math.ceil(n / cols)},1fr);`;
+      style += `grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`;
     }
     if (f.kind === "raid") body = Array.from({ length: 25 }, () => '<span class="raid-cell"></span>').join("");
     if (["chat", "minimap", "unknown"].includes(f.kind)) body = `<span class="frame-text">${esc(f.label)}</span>`;
