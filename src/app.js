@@ -14,10 +14,11 @@ function redo(){if(!future.length)return;history.push(snapshot());restore(future
 function selectedFrame(){return frames.find(f=>f.id===selected);}
 function render(){
  const view=viewport();frames=framesFor(profile,view);if(!selectedFrame())selected=frames[0].id;
- $('#count').textContent=`${frames.length} frames`;$('#profile-status').textContent=source+(dirty?' · Edited':'');$('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
- $('#layers').innerHTML=frames.map(f=>`<button class="layer ${f.id===selected?'active':''}" data-id="${esc(f.id)}" aria-pressed="${f.id===selected}"><span>${esc(f.label)}</span><small>${f.warning?'!':f.enabled?'◇':'off'}</small></button>`).join('');
+ const showUnsupported=$('#show-unsupported').checked,unsupported=frames.filter(f=>f.kind==='unknown'),visible=showUnsupported?frames:frames.filter(f=>f.kind!=='unknown');if(!visible.some(f=>f.id===selected))selected=visible[0]?.id||frames[0].id;
+ $('#count').textContent=unsupported.length&&!showUnsupported?`${visible.length} frames · ${unsupported.length} preserved`:`${visible.length} frames`;$('#profile-status').textContent=source+(dirty?' · Edited':'');$('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
+ $('#layers').innerHTML=visible.map(f=>`<button class="layer ${f.id===selected?'active':''}" data-id="${esc(f.id)}" aria-pressed="${f.id===selected}"><span>${esc(f.label)}</span><small>${f.warning?'!':f.enabled?'◇':'off'}</small></button>`).join('');
  $('#stage').style.aspectRatio=`${view.w}/${view.h}`;$('#stage').style.width=`${$('#canvas-zoom').value}%`;$('#stage').classList.toggle('no-grid',!$('#grid').checked);
- $('#frames').innerHTML=frames.filter(f=>f.rect).map(f=>{
+ $('#frames').innerHTML=visible.filter(f=>f.rect).map(f=>{
  let body=`<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
  let style=`left:${f.rect.left/view.w*100}%;top:${f.rect.top/view.h*100}%;width:${f.w/view.w*100}%;height:${f.h/view.h*100}%;opacity:${f.enabled?1:.32};`;
  if(f.kind==='bar'){const n=Math.max(1,Math.min(12,Number(get(profile,[...f.path,'buttons'],12))||12)),cols=Math.max(1,Math.min(12,Number(get(profile,[...f.path,'buttonsPerRow'],12))||12));body=Array.from({length:n},(_,i)=>`<span class="slot">${i<9?i+1:i===9?'0':i===10?'-':'='}</span>`).join('');style+=`grid-template-columns:repeat(${Math.min(cols,n)},1fr);grid-template-rows:repeat(${Math.ceil(n/cols)},1fr);`;}
@@ -74,7 +75,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drag){finishDrag(tr
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
  if(e.target.closest('#frames')&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();const f=selectedFrame();if(!f?.rect)return;const n=e.shiftKey?10:1;mutate(()=>moveFrame(profile,f,f.rect.left+(e.key==='ArrowLeft'?-n:e.key==='ArrowRight'?n:0),f.rect.top+(e.key==='ArrowUp'?-n:e.key==='ArrowDown'?n:0),viewport()),`${f.label} nudged`);focusFrame();}});
 $('#undo').onclick=undo;$('#redo').onclick=redo;
-$('#grid').onchange=render;$('#resolution').onchange=()=>{render();status('Preview viewport updated; profile settings are unchanged');};
+$('#grid').onchange=render;$('#show-unsupported').onchange=()=>{render();status($('#show-unsupported').checked?'Unsupported anchors shown as approximate placeholders':'Unsupported anchors hidden; their profile data is still preserved');};$('#resolution').onchange=()=>{render();status('Preview viewport updated; profile settings are unchanged');};
 $('#canvas-zoom').onchange=()=>{const wrap=$('.stage-wrap');render();wrap.scrollTo({left:(wrap.scrollWidth-wrap.clientWidth)/2,top:(wrap.scrollHeight-wrap.clientHeight)/2,behavior:'smooth'});status(`Canvas zoom set to ${$('#canvas-zoom').value}%; profile settings are unchanged`);};
 $('#ui-scale').onchange=()=>{if(!$('#ui-scale').checkValidity()||!Number($('#ui-scale').value))$('#ui-scale').value='0.71';render();status('Preview scale updated; match this to your in-game UI scale');};
 $('#profile-name').onchange=()=>{const next=$('#profile-name').value.trim();if(!next||/[\x00-\x1f:]/.test(next)){status('Profile names cannot be empty or contain colons.');$('#profile-name').value=name;return;}mutate(()=>name=next,'Profile renamed');};

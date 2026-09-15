@@ -5515,15 +5515,17 @@ function render() {
   const view = viewport();
   frames = framesFor(profile, view);
   if (!selectedFrame()) selected = frames[0].id;
-  $("#count").textContent = `${frames.length} frames`;
+  const showUnsupported = $("#show-unsupported").checked, unsupported = frames.filter((f) => f.kind === "unknown"), visible = showUnsupported ? frames : frames.filter((f) => f.kind !== "unknown");
+  if (!visible.some((f) => f.id === selected)) selected = visible[0]?.id || frames[0].id;
+  $("#count").textContent = unsupported.length && !showUnsupported ? `${visible.length} frames \xB7 ${unsupported.length} preserved` : `${visible.length} frames`;
   $("#profile-status").textContent = source + (dirty ? " \xB7 Edited" : "");
   $("#undo").disabled = !history.length;
   $("#redo").disabled = !future.length;
-  $("#layers").innerHTML = frames.map((f) => `<button class="layer ${f.id === selected ? "active" : ""}" data-id="${esc(f.id)}" aria-pressed="${f.id === selected}"><span>${esc(f.label)}</span><small>${f.warning ? "!" : f.enabled ? "\u25C7" : "off"}</small></button>`).join("");
+  $("#layers").innerHTML = visible.map((f) => `<button class="layer ${f.id === selected ? "active" : ""}" data-id="${esc(f.id)}" aria-pressed="${f.id === selected}"><span>${esc(f.label)}</span><small>${f.warning ? "!" : f.enabled ? "\u25C7" : "off"}</small></button>`).join("");
   $("#stage").style.aspectRatio = `${view.w}/${view.h}`;
   $("#stage").style.width = `${$("#canvas-zoom").value}%`;
   $("#stage").classList.toggle("no-grid", !$("#grid").checked);
-  $("#frames").innerHTML = frames.filter((f) => f.rect).map((f) => {
+  $("#frames").innerHTML = visible.filter((f) => f.rect).map((f) => {
     let body = `<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
     let style = `left:${f.rect.left / view.w * 100}%;top:${f.rect.top / view.h * 100}%;width:${f.w / view.w * 100}%;height:${f.h / view.h * 100}%;opacity:${f.enabled ? 1 : 0.32};`;
     if (f.kind === "bar") {
@@ -5658,6 +5660,10 @@ document.addEventListener("keydown", (e) => {
 $("#undo").onclick = undo;
 $("#redo").onclick = redo;
 $("#grid").onchange = render;
+$("#show-unsupported").onchange = () => {
+  render();
+  status($("#show-unsupported").checked ? "Unsupported anchors shown as approximate placeholders" : "Unsupported anchors hidden; their profile data is still preserved");
+};
 $("#resolution").onchange = () => {
   render();
   status("Preview viewport updated; profile settings are unchanged");
