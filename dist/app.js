@@ -5343,12 +5343,15 @@ function parseInput(input) {
 // src/model.js
 var ANCHORS = ["TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT"];
 var unit = (id, label, mover, x, y, w = 270, h = 54) => ({ id, label, mover, kind: id, path: ["unitframe", "units", id], w, h, x, y, resize: true, enable: true });
-var DEFINITIONS = [unit("player", "Player", "ElvUF_PlayerMover", -320, -180), unit("target", "Target", "ElvUF_TargetMover", 320, -180), unit("focus", "Focus", "ElvUF_FocusMover", -320, -95, 180, 36), unit("pet", "Pet", "ElvUF_PetMover", -320, -250, 180, 30), { id: "bar1", label: "Action bar 1", mover: "ElvAB_1", kind: "bar", path: ["actionbar", "bar1"], x: 0, y: -370, w: 430, h: 34, enable: true }, { id: "bar2", label: "Action bar 2", mover: "ElvAB_2", kind: "bar", path: ["actionbar", "bar2"], x: 0, y: -326, w: 430, h: 34, enable: true }, { id: "minimap", label: "Minimap", mover: "MinimapMover", kind: "minimap", path: ["general", "minimap"], x: 805, y: 380, w: 170, h: 170, resize: true }, { id: "leftchat", label: "Left chat", mover: "LeftChatMover", kind: "chat", x: -725, y: -355, w: 400, h: 180 }, { id: "rightchat", label: "Right chat", mover: "RightChatMover", kind: "chat", x: 725, y: -355, w: 400, h: 180 }, { id: "raid1", label: "Raid group", mover: "ElvUF_Raid1Mover", kind: "raid", path: ["unitframe", "units", "raid1"], x: -745, y: 0, w: 300, h: 190 }];
+var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 430, h: 34, enable: true, enableKey: "enabled" });
+var ACTION_BAR_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15];
+var BASE_DEFINITIONS = [unit("player", "Player", "ElvUF_PlayerMover", -320, -180), unit("target", "Target", "ElvUF_TargetMover", 320, -180), unit("focus", "Focus", "ElvUF_FocusMover", -320, -95, 180, 36), unit("pet", "Pet", "ElvUF_PetMover", -320, -250, 180, 30), bar(1), bar(2, 0, -326), { id: "minimap", label: "Minimap", mover: "MinimapMover", kind: "minimap", path: ["general", "minimap"], x: 805, y: 380, w: 170, h: 170, resize: true }, { id: "leftchat", label: "Left chat", mover: "LeftChatMover", kind: "chat", x: -725, y: -355, w: 400, h: 180 }, { id: "rightchat", label: "Right chat", mover: "RightChatMover", kind: "chat", x: 725, y: -355, w: 400, h: 180 }, { id: "raid1", label: "Raid group", mover: "ElvUF_Raid1Mover", kind: "raid", path: ["unitframe", "units", "raid1"], x: -745, y: 0, w: 300, h: 190 }];
+var DEFINITIONS = [...BASE_DEFINITIONS];
 function newProfile() {
   const p = /* @__PURE__ */ new Map();
   for (const d of DEFINITIONS) {
     set(p, ["movers", d.mover], `CENTER,UIParent,CENTER,${d.x},${d.y}`);
-    if (d.enable) set(p, [...d.path, "enable"], true);
+    if (d.enable) set(p, [...d.path, d.enableKey || "enable"], true);
     if (d.resize) {
       if (d.kind === "minimap") set(p, [...d.path, "size"], d.w);
       else {
@@ -5380,9 +5383,9 @@ function dimensions(p, d) {
   let w = d.w, h = d.h;
   let path = d.path;
   if (d.kind === "bar") {
-    const n = get(p, [...path, "buttons"], 12), cols = get(p, [...path, "buttonsPerRow"], 12), size = get(p, [...path, "buttonSize"], 34), gap = get(p, [...path, "buttonSpacing"], 2);
+    const n = get(p, [...path, "buttons"], 12), cols = get(p, [...path, "buttonsPerRow"], 12), size = get(p, [...path, "buttonSize"], 34), height = get(p, [...path, "keepSizeRatio"], true) === false ? get(p, [...path, "buttonHeight"], size) : size, gap = get(p, [...path, "buttonSpacing"], 2);
     w = Math.min(n, cols) * size + (Math.min(n, cols) - 1) * gap;
-    h = Math.ceil(n / cols) * size + (Math.ceil(n / cols) - 1) * gap;
+    h = Math.ceil(n / cols) * height + (Math.ceil(n / cols) - 1) * gap;
   } else if (d.kind === "minimap") w = h = get(p, [...path, "size"], 170);
   else if (d.kind === "chat") {
     const right = d.id === "rightchat" && get(p, ["chat", "separateSizes"], false);
@@ -5395,14 +5398,17 @@ function dimensions(p, d) {
   return { w: typeof w === "number" && w > 0 ? Math.min(w, 8e3) : d.w, h: typeof h === "number" && h > 0 ? Math.min(h, 8e3) : d.h };
 }
 function framesFor(p, viewport2) {
-  const defs = [...DEFINITIONS];
-  const movers = get(p, ["movers"]);
+  const defs = [...DEFINITIONS], movers = get(p, ["movers"]);
+  for (const n of ACTION_BAR_IDS.slice(2)) {
+    const d = bar(n, n === 4 ? 900 : n >= 6 ? 850 : 0, n === 3 ? -280 : n === 4 ? 0 : n === 5 ? -370 : 140 + (n - 6) * 38);
+    if (get(p, d.path) instanceof Map || get(p, ["movers", d.mover]) !== void 0) defs.splice(4 + n, 0, d);
+  }
   if (movers instanceof Map) {
     for (const [m] of movers) if (typeof m === "string" && !defs.some((d) => d.mover === m)) defs.push({ id: m, label: m, kind: "unknown", mover: m, w: 160, h: 40, x: 0, y: 0 });
   }
   const frames2 = defs.map((d) => {
     const raw = get(p, ["movers", d.mover]);
-    return { ...d, ...dimensions(p, d), enabled: d.enable ? get(p, [...d.path, "enable"], true) !== false : true, moverData: parseMover(raw), raw, estimated: raw === void 0 };
+    return { ...d, ...dimensions(p, d), enabled: d.enable ? get(p, [...d.path, d.enableKey || "enable"], true) !== false : true, moverData: parseMover(raw), raw, estimated: raw === void 0 };
   });
   const roots = ["UIParent", "ElvUIParent"];
   function resolve(f, seen = /* @__PURE__ */ new Set()) {
@@ -5517,7 +5523,8 @@ function render() {
   if (!selectedFrame()) selected = frames[0].id;
   const showUnsupported = $("#show-unsupported").checked, unsupported = frames.filter((f) => f.kind === "unknown"), visible = showUnsupported ? frames : frames.filter((f) => f.kind !== "unknown");
   if (!visible.some((f) => f.id === selected)) selected = visible[0]?.id || frames[0].id;
-  $("#count").textContent = unsupported.length && !showUnsupported ? `${visible.length} frames \xB7 ${unsupported.length} preserved` : `${visible.length} frames`;
+  const active = visible.filter((f) => f.enabled), off = visible.length - active.length;
+  $("#count").textContent = `${active.length} visible${off ? ` \xB7 ${off} off` : ""}${unsupported.length && !showUnsupported ? ` \xB7 ${unsupported.length} preserved` : ""}`;
   $("#profile-status").textContent = source + (dirty ? " \xB7 Edited" : "");
   $("#undo").disabled = !history.length;
   $("#redo").disabled = !future.length;
@@ -5525,7 +5532,7 @@ function render() {
   $("#stage").style.aspectRatio = `${view.w}/${view.h}`;
   $("#stage").style.width = `${$("#canvas-zoom").value}%`;
   $("#stage").classList.toggle("no-grid", !$("#grid").checked);
-  $("#frames").innerHTML = visible.filter((f) => f.rect).map((f) => {
+  $("#frames").innerHTML = active.filter((f) => f.rect).map((f) => {
     let body = `<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
     let style = `left:${f.rect.left / view.w * 100}%;top:${f.rect.top / view.h * 100}%;width:${f.w / view.w * 100}%;height:${f.h / view.h * 100}%;opacity:${f.enabled ? 1 : 0.32};`;
     if (f.kind === "bar") {
@@ -5573,7 +5580,7 @@ function renderProperties() {
       if (changed.some((input) => ["prop-width", "prop-height"].includes(input.id))) resizeFrame(profile, f, values.get("prop-width"), values.get("prop-height") ?? f.h);
       for (const input of changed) {
         const id = input.id;
-        if (id === "prop-enable") set(profile, [...f.path, "enable"], values.get(id));
+        if (id === "prop-enable") set(profile, [...f.path, f.enableKey || "enable"], values.get(id));
         const key = { "prop-buttons": "buttons", "prop-cols": "buttonsPerRow", "prop-size": "buttonSize", "prop-gap": "buttonSpacing" }[id];
         if (key) set(profile, [...f.path, key], values.get(id));
       }

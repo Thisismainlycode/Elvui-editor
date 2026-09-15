@@ -15,10 +15,10 @@ function selectedFrame(){return frames.find(f=>f.id===selected);}
 function render(){
  const view=viewport();frames=framesFor(profile,view);if(!selectedFrame())selected=frames[0].id;
  const showUnsupported=$('#show-unsupported').checked,unsupported=frames.filter(f=>f.kind==='unknown'),visible=showUnsupported?frames:frames.filter(f=>f.kind!=='unknown');if(!visible.some(f=>f.id===selected))selected=visible[0]?.id||frames[0].id;
- $('#count').textContent=unsupported.length&&!showUnsupported?`${visible.length} frames · ${unsupported.length} preserved`:`${visible.length} frames`;$('#profile-status').textContent=source+(dirty?' · Edited':'');$('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
+ const active=visible.filter(f=>f.enabled),off=visible.length-active.length;$('#count').textContent=`${active.length} visible${off?` · ${off} off`:''}${unsupported.length&&!showUnsupported?` · ${unsupported.length} preserved`:''}`;$('#profile-status').textContent=source+(dirty?' · Edited':'');$('#undo').disabled=!history.length;$('#redo').disabled=!future.length;
  $('#layers').innerHTML=visible.map(f=>`<button class="layer ${f.id===selected?'active':''}" data-id="${esc(f.id)}" aria-pressed="${f.id===selected}"><span>${esc(f.label)}</span><small>${f.warning?'!':f.enabled?'◇':'off'}</small></button>`).join('');
  $('#stage').style.aspectRatio=`${view.w}/${view.h}`;$('#stage').style.width=`${$('#canvas-zoom').value}%`;$('#stage').classList.toggle('no-grid',!$('#grid').checked);
- $('#frames').innerHTML=visible.filter(f=>f.rect).map(f=>{
+ $('#frames').innerHTML=active.filter(f=>f.rect).map(f=>{
  let body=`<span class="fill"></span><span class="frame-text">${esc(f.label)}</span><span class="frame-text">100%</span>`;
  let style=`left:${f.rect.left/view.w*100}%;top:${f.rect.top/view.h*100}%;width:${f.w/view.w*100}%;height:${f.h/view.h*100}%;opacity:${f.enabled?1:.32};`;
  if(f.kind==='bar'){const n=Math.max(1,Math.min(12,Number(get(profile,[...f.path,'buttons'],12))||12)),cols=Math.max(1,Math.min(12,Number(get(profile,[...f.path,'buttonsPerRow'],12))||12));body=Array.from({length:n},(_,i)=>`<span class="slot">${i<9?i+1:i===9?'0':i===10?'-':'='}</span>`).join('');style+=`grid-template-columns:repeat(${Math.min(cols,n)},1fr);grid-template-rows:repeat(${Math.ceil(n/cols)},1fr);`;}
@@ -50,7 +50,7 @@ function renderProperties(){
   mutate(()=>{
    if(changed.some(input=>['prop-x','prop-y','prop-anchor'].includes(input.id)))set(profile,['movers',f.mover],`${values.get('prop-anchor')},${m.parent},${m.relative},${values.get('prop-x')},${values.get('prop-y')}`);
    if(changed.some(input=>['prop-width','prop-height'].includes(input.id)))resizeFrame(profile,f,values.get('prop-width'),values.get('prop-height')??f.h);
-   for(const input of changed){const id=input.id;if(id==='prop-enable')set(profile,[...f.path,'enable'],values.get(id));const key={'prop-buttons':'buttons','prop-cols':'buttonsPerRow','prop-size':'buttonSize','prop-gap':'buttonSpacing'}[id];if(key)set(profile,[...f.path,key],values.get(id));}
+   for(const input of changed){const id=input.id;if(id==='prop-enable')set(profile,[...f.path,f.enableKey||'enable'],values.get(id));const key={'prop-buttons':'buttons','prop-cols':'buttonsPerRow','prop-size':'buttonSize','prop-gap':'buttonSpacing'}[id];if(key)set(profile,[...f.path,key],values.get(id));}
   },`${f.label} updated`);return true;
  };
  $('#apply-properties').onclick=()=>applyProperties();
