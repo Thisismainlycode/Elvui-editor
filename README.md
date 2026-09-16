@@ -15,6 +15,7 @@ ElvUI Layout Studio lets returning players import an existing layout, reposition
 - Move supported frames by dragging, coordinates, anchors, grid snapping, or arrow keys.
 - Resize supported unit frames and the minimap.
 - Edit action bar button layout and visibility.
+- Preview and edit BenikUI detached portraits, dashboards, custom panels, widget bars, and the request-stop button from their real profile settings.
 - Preview common resolutions and UI scales.
 - Undo and redo layout changes.
 - Export an ElvUI Lua table profile or an experimental `!E2!` profile string.
@@ -57,7 +58,7 @@ Current ElvUI source uses CBOR, a `::profile::name` envelope, Deflate compressio
 
 The automated suite covers legacy upgrades, `!E2!` envelopes, unknown-field preservation, plugin tables, mixed table keys, Unicode, coordinate conversion, and malformed inputs. These checks establish internal preservation; they do not replace an import test inside WoW.
 
-The visual canvas is approximate. Missing mover positions use editor estimates, and unsupported frames use placeholder dimensions. Fonts, textures, combat behavior, plugin rendering, and some dynamic frames are not simulated. Unresolved relative anchors are preserved and cannot be moved until their parent frame is known.
+The visual canvas is approximate. Missing mover positions use editor estimates, and unknown plugin movers use compact editable anchor markers. BenikUI has first-class geometry and visibility support; dashboard contents and context-only frames can still differ outside the game. Fonts, textures, combat behavior, and live game data are not simulated. Unresolved relative anchors are preserved and cannot be moved until their parent frame is known.
 
 Character profiles are supported. Global, private, filter, and style-filter exports are outside the current editor scope.
 

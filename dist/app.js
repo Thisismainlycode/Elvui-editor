@@ -5346,6 +5346,14 @@ var unit = (id, label, mover, x, y, w = 270, h = 54) => ({ id, label, mover, kin
 var DEFAULT_ENABLED_BARS = /* @__PURE__ */ new Set([1, 3, 4, 5]);
 var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 406, h: 32, enable: true, enableKey: "enabled", defaultEnabled: DEFAULT_ENABLED_BARS.has(n), defaultButtons: n === 3 || n === 5 ? 6 : 12, defaultCols: n === 4 ? 1 : n === 3 || n === 5 ? 6 : 12, defaultBackdrop: n === 4 });
 var ACTION_BAR_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15];
+var BENIKUI_PORTRAITS = [["player", "Player"], ["target", "Target"], ["targettarget", "Target target"], ["focus", "Focus"], ["pet", "Pet"]];
+var BENIKUI_DASHBOARDS = [
+  ["system", "BuiDashboardMover", "System dashboard", 150],
+  ["tokens", "tokenHolderMover", "Tokens dashboard", 150],
+  ["professions", "ProfessionsMover", "Professions dashboard", 150],
+  ["reputations", "reputationHolderMover", "Reputations dashboard", 200],
+  ["items", "itemsHolderMover", "Items dashboard", 150]
+];
 var BASE_DEFINITIONS = [unit("player", "Player", "ElvUF_PlayerMover", -320, -180), unit("target", "Target", "ElvUF_TargetMover", 320, -180), unit("focus", "Focus", "ElvUF_FocusMover", -320, -95, 180, 36), unit("pet", "Pet", "ElvUF_PetMover", -320, -250, 180, 30), bar(1), bar(2, 0, -326), { id: "minimap", label: "Minimap", mover: "MinimapMover", kind: "minimap", path: ["general", "minimap"], x: 805, y: 380, w: 170, h: 170, resize: true }, { id: "leftchat", label: "Left chat", mover: "LeftChatMover", kind: "chat", x: -725, y: -355, w: 400, h: 180 }, { id: "rightchat", label: "Right chat", mover: "RightChatMover", kind: "chat", x: 725, y: -355, w: 400, h: 180 }, { id: "raid1", label: "Raid group", mover: "ElvUF_Raid1Mover", kind: "raid", path: ["unitframe", "units", "raid1"], x: -745, y: 0, w: 300, h: 190 }];
 var DEFINITIONS = [...BASE_DEFINITIONS];
 function newProfile() {
@@ -5386,7 +5394,7 @@ function actionBarLayout(p, d) {
 }
 function dimensions(p, d) {
   let w = d.w, h = d.h;
-  let path = d.path;
+  let path = d.dimensionPath || d.path;
   if (d.kind === "bar") ({ w, h } = actionBarLayout(p, d));
   else if (d.kind === "minimap") w = h = get(p, [...path, "size"], 170);
   else if (d.kind === "chat") {
@@ -5394,10 +5402,43 @@ function dimensions(p, d) {
     w = get(p, ["chat", right ? "panelWidthRight" : "panelWidth"], 400);
     h = get(p, ["chat", right ? "panelHeightRight" : "panelHeight"], 180);
   } else if (d.resize) {
-    w = get(p, [...path, "width"], w);
-    h = get(p, [...path, "height"], h);
+    w = get(p, [...path, d.widthKey || "width"], w);
+    h = get(p, [...path, d.heightKey || "height"], h);
   }
   return { w: typeof w === "number" && w > 0 ? Math.min(w, 8e3) : d.w, h: typeof h === "number" && h > 0 ? Math.min(h, 8e3) : d.h };
+}
+function benikUIDashboardHeight(p, key) {
+  const path = ["benikui", "dashboards", key], orientation = get(p, [...path, "orientation"], "BOTTOM"), spacing = get(p, [...path, "spacing"], 1);
+  let rows = 1;
+  if (key === "system") {
+    const choices = get(p, [...path, "chooseSystem"]);
+    rows = choices instanceof Map ? [...choices.values()].filter(Boolean).length : 5;
+  }
+  return orientation === "BOTTOM" ? 23 * Math.max(1, rows) + 3 : 23;
+}
+function benikUIDefinitions(p) {
+  const movers = get(p, ["movers"]), bui = get(p, ["benikui"]), hasBui = bui instanceof Map, defs = [];
+  const add = (d) => {
+    if (hasBui || get(movers, [d.mover]) !== void 0) defs.push({ ...d, plugin: "BenikUI" });
+  };
+  for (const [unitId, label] of BENIKUI_PORTRAITS) {
+    const path = ["benikui", "unitframes", unitId], dimensionPath = unitId === "target" && get(p, [...path, "getPlayerPortraitSize"], true) !== false ? ["benikui", "unitframes", "player"] : path;
+    add({ id: `benikui-portrait-${unitId}`, label: `${label} portrait`, mover: `${unitId === "targettarget" ? "TargetTarget" : label}PortraitMover`, kind: "benikui", subkind: "portrait", path, dimensionPath, widthKey: "portraitWidth", heightKey: "portraitHeight", enable: true, enableKey: "detachPortrait", defaultEnabled: false, resize: true, w: 110, h: 85, x: unitId === "player" ? -460 : 460, y: -180 });
+  }
+  for (const [key, mover, label, width] of BENIKUI_DASHBOARDS) {
+    const path = ["benikui", "dashboards", key], orientation = get(p, [...path, "orientation"], "BOTTOM"), rows = key === "system" ? get(p, [...path, "chooseSystem"]) instanceof Map ? [...get(p, [...path, "chooseSystem"]).values()].filter(Boolean).length : 5 : 1, w = get(p, [...path, "width"], width), h = benikUIDashboardHeight(p, key);
+    add({ id: `benikui-dashboard-${key}`, label, mover, kind: "benikui", subkind: "dashboard", path, enable: true, defaultEnabled: true, w: orientation === "BOTTOM" ? w : w * Math.max(1, rows) + (Math.max(1, rows) - 1) * get(p, [...path, "spacing"], 1), h, x: -750, y: 360 });
+  }
+  add({ id: "benikui-request-stop", label: "Request stop button", mover: "RequestStopButton", kind: "benikui", subkind: "button", path: ["benikui", "actionbars"], enable: true, enableKey: "requestStop", defaultEnabled: true, w: 240, h: 40, x: 0, y: 390 });
+  for (const [key, mover, label, y] of [["mawBar", "BUIMawBarMover", "Maw bar", 365], ["preyBar", "BUIPreyBarMover", "Prey bar", 390]]) add({ id: `benikui-${key}`, label, mover, kind: "benikui", subkind: "widgetbar", path: ["benikui", "widgetbars", key], enable: true, defaultEnabled: true, resize: true, w: get(p, ["benikui", "widgetbars", key, "width"], 222), h: get(p, ["benikui", "widgetbars", key, "height"], 5), x: 0, y });
+  if (bui instanceof Map) {
+    const panels = get(bui, ["panels"]);
+    if (panels instanceof Map) for (const [name2, data] of panels) {
+      if (typeof name2 !== "string" || !(data instanceof Map)) continue;
+      defs.push({ id: `benikui-panel-${name2}`, label: name2.replace(/^BenikUI_/, ""), mover: `${name2}_Mover`, kind: "benikui", subkind: "panel", plugin: "BenikUI", path: ["benikui", "panels", name2], enable: true, defaultEnabled: true, resize: true, w: get(data, ["width"], 200), h: get(data, ["height"], 200), x: -600, y: 0 });
+    }
+  }
+  return defs;
 }
 function framesFor(p, viewport2) {
   const defs = [...DEFINITIONS], movers = get(p, ["movers"]);
@@ -5405,6 +5446,7 @@ function framesFor(p, viewport2) {
     const d = bar(n, n === 4 ? 900 : n >= 6 ? 850 : 0, n === 3 ? -280 : n === 4 ? 0 : n === 5 ? -370 : 140 + (n - 6) * 38);
     if (get(p, d.path) instanceof Map || get(p, ["movers", d.mover]) !== void 0) defs.splice(4 + n, 0, d);
   }
+  defs.push(...benikUIDefinitions(p));
   if (movers instanceof Map) {
     for (const [m] of movers) if (typeof m === "string" && !defs.some((d) => d.mover === m)) {
       const label = m.replace(/Mover$/, "").replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim() || m;
@@ -5463,10 +5505,11 @@ function moveFrame(p, f, left, top, viewport2) {
 function resizeFrame(p, f, w, h) {
   if (!f.resize) throw Error("This frame does not support resizing.");
   if (!Number.isFinite(w) || !Number.isFinite(h) || w < 10 || h < 10 || w > 2e3 || h > 2e3) throw Error("Dimensions must be between 10 and 2000 UI units.");
-  if (f.kind === "minimap") set(p, [...f.path, "size"], Math.round(w));
+  const path = f.dimensionPath || f.path;
+  if (f.kind === "minimap") set(p, [...path, "size"], Math.round(w));
   else {
-    set(p, [...f.path, "width"], Math.round(w));
-    set(p, [...f.path, "height"], Math.round(h));
+    set(p, [...path, f.widthKey || "width"], Math.round(w));
+    set(p, [...path, f.heightKey || "height"], Math.round(h));
   }
 }
 
@@ -5554,7 +5597,7 @@ function render() {
       style += `grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`;
     }
     if (f.kind === "raid") body = Array.from({ length: 25 }, () => '<span class="raid-cell"></span>').join("");
-    if (["chat", "minimap", "anchor"].includes(f.kind)) body = `<span class="frame-text">${esc(f.label)}</span>`;
+    if (["chat", "minimap", "anchor", "benikui"].includes(f.kind)) body = `<span class="frame-text">${esc(f.label)}</span>`;
     return `<button class="frame ${f.kind} ${f.resize && f.kind !== "minimap" ? "power" : ""} ${f.id === selected ? "selected" : ""}" data-id="${esc(f.id)}" data-label="${esc(f.label)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id === selected && f.resize ? '<span class="handle" aria-hidden="true"></span>' : ""}</button>`;
   }).join("");
   renderProperties();
@@ -5563,8 +5606,8 @@ var field = (label, id, value, min = -99999, max2 = 99999) => `<label class="fie
 function renderProperties() {
   const f = selectedFrame(), m = f.moverData || { anchor: "CENTER", parent: "UIParent", relative: "CENTER", x: f.x, y: f.y };
   $("#frame-title").textContent = f.label;
-  $("#frame-kind").textContent = f.kind === "anchor" ? "CUSTOM ANCHOR" : f.kind.toUpperCase();
-  $("#frame-description").textContent = f.kind === "anchor" ? "Editable anchor \xB7 frame size is not simulated" : f.estimated ? "Estimated position \xB7 no saved mover" : f.kind === "raid" ? "Approximate group footprint" : "Position and dimensions";
+  $("#frame-kind").textContent = f.kind === "anchor" ? "CUSTOM ANCHOR" : f.plugin ? f.plugin.toUpperCase() : f.kind.toUpperCase();
+  $("#frame-description").textContent = f.kind === "anchor" ? "Editable anchor \xB7 frame size is not simulated" : f.kind === "benikui" ? `BenikUI ${f.subkind} \xB7 source-backed footprint` : f.estimated ? "Estimated position \xB7 no saved mover" : f.kind === "raid" ? "Approximate group footprint" : "Position and dimensions";
   let html = "";
   if (f.warning) html += `<p class="readonly-note">${esc(f.warning)}</p>`;
   else html += `<div class="property-group"><h2>POSITION \xB7 UI UNITS</h2><div class="field-row">${field("X offset", "prop-x", m.x)}${field("Y offset", "prop-y", m.y)}</div><label class="field">Frame anchor<select id="prop-anchor">${ANCHORS.map((a) => `<option ${a === m.anchor ? "selected" : ""}>${a}</option>`).join("")}</select></label><p class="anchor-code">Relative to ${esc(m.parent)} \xB7 ${esc(m.relative)}<br>Positive Y moves upward.</p></div>`;
@@ -5573,7 +5616,7 @@ function renderProperties() {
   if (f.kind === "chat") html += '<p class="muted">Chat panel size is previewed from your profile. This version edits its position only.</p>';
   if (f.kind === "raid") html += '<p class="muted">The group footprint is a placeholder. Only its saved mover position is editable.</p>';
   if (f.kind === "anchor") html += '<p class="muted">This marker represents the exact saved anchor point. The add-on frame size is unknown, so no panel footprint is invented.</p>';
-  if (f.enable) html += `<div class="property-group"><label class="check" style="margin:0"><input id="prop-enable" type="checkbox" ${f.enabled ? "checked" : ""}> Enable frame in ElvUI</label></div>`;
+  if (f.enable) html += `<div class="property-group"><label class="check" style="margin:0"><input id="prop-enable" type="checkbox" ${f.enabled ? "checked" : ""}> Enable frame in ${f.plugin || "ElvUI"}</label></div>`;
   html += `<button id="apply-properties" style="margin-top:20px">Apply properties</button><div class="property-group"><h2>PROFILE SETTING</h2><code class="anchor-code">movers.${esc(f.mover)}</code></div>`;
   $("#properties").innerHTML = html;
   $("#selection-coords").textContent = f.rect ? `${Math.round(f.w)} \xD7 ${Math.round(f.h)} UI units` : "Position unavailable";

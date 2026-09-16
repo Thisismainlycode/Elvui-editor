@@ -23,21 +23,21 @@ function render(){
  let style=`left:${f.rect.left/view.w*100}%;top:${f.rect.top/view.h*100}%;width:${f.w/view.w*100}%;height:${f.h/view.h*100}%;opacity:${f.enabled?1:.32};`;
  if(f.kind==='bar'){const {n,cols,rows}=actionBarLayout(profile,f);body=Array.from({length:n},(_,i)=>`<span class="slot">${i<9?i+1:i===9?'0':i===10?'-':'='}</span>`).join('');style+=`grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`;}
  if(f.kind==='raid')body=Array.from({length:25},()=>'<span class="raid-cell"></span>').join('');
- if(['chat','minimap','anchor'].includes(f.kind))body=`<span class="frame-text">${esc(f.label)}</span>`;
+ if(['chat','minimap','anchor','benikui'].includes(f.kind))body=`<span class="frame-text">${esc(f.label)}</span>`;
  return `<button class="frame ${f.kind} ${f.resize&&f.kind!=='minimap'?'power':''} ${f.id===selected?'selected':''}" data-id="${esc(f.id)}" data-label="${esc(f.label)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id===selected&&f.resize?'<span class="handle" aria-hidden="true"></span>':''}</button>`;
  }).join('');renderProperties();
 }
 const field=(label,id,value,min=-99999,max=99999)=>`<label class="field">${label}<input id="${id}" type="number" min="${min}" max="${max}" step="1" value="${Number(value)}" required></label>`;
 function renderProperties(){
  const f=selectedFrame(),m=f.moverData||{anchor:'CENTER',parent:'UIParent',relative:'CENTER',x:f.x,y:f.y};
- $('#frame-title').textContent=f.label;$('#frame-kind').textContent=f.kind==='anchor'?'CUSTOM ANCHOR':f.kind.toUpperCase();$('#frame-description').textContent=f.kind==='anchor'?'Editable anchor · frame size is not simulated':f.estimated?'Estimated position · no saved mover':f.kind==='raid'?'Approximate group footprint':'Position and dimensions';
+ $('#frame-title').textContent=f.label;$('#frame-kind').textContent=f.kind==='anchor'?'CUSTOM ANCHOR':f.plugin?f.plugin.toUpperCase():f.kind.toUpperCase();$('#frame-description').textContent=f.kind==='anchor'?'Editable anchor · frame size is not simulated':f.kind==='benikui'?`BenikUI ${f.subkind} · source-backed footprint`:f.estimated?'Estimated position · no saved mover':f.kind==='raid'?'Approximate group footprint':'Position and dimensions';
  let html='';if(f.warning)html+=`<p class="readonly-note">${esc(f.warning)}</p>`;
  else html+=`<div class="property-group"><h2>POSITION · UI UNITS</h2><div class="field-row">${field('X offset','prop-x',m.x)}${field('Y offset','prop-y',m.y)}</div><label class="field">Frame anchor<select id="prop-anchor">${ANCHORS.map(a=>`<option ${a===m.anchor?'selected':''}>${a}</option>`).join('')}</select></label><p class="anchor-code">Relative to ${esc(m.parent)} · ${esc(m.relative)}<br>Positive Y moves upward.</p></div>`;
  if(f.resize)html+=`<div class="property-group"><h2>DIMENSIONS</h2><div class="field-row">${field(f.kind==='minimap'?'Size':'Width','prop-width',f.w,10,2000)}${f.kind==='minimap'?'':field('Height','prop-height',f.h,10,2000)}</div></div>`;
  if(f.kind==='bar')html+=`<div class="property-group"><h2>BUTTON LAYOUT</h2><div class="field-row">${field('Buttons','prop-buttons',get(profile,[...f.path,'buttons'],12),1,12)}${field('Per row','prop-cols',get(profile,[...f.path,'buttonsPerRow'],12),1,12)}${field('Size','prop-size',get(profile,[...f.path,'buttonSize'],34),16,100)}${field('Spacing','prop-gap',get(profile,[...f.path,'buttonSpacing'],2),0,30)}</div></div>`;
  if(f.kind==='chat')html+='<p class="muted">Chat panel size is previewed from your profile. This version edits its position only.</p>';
  if(f.kind==='raid')html+='<p class="muted">The group footprint is a placeholder. Only its saved mover position is editable.</p>';if(f.kind==='anchor')html+='<p class="muted">This marker represents the exact saved anchor point. The add-on frame size is unknown, so no panel footprint is invented.</p>';
- if(f.enable)html+=`<div class="property-group"><label class="check" style="margin:0"><input id="prop-enable" type="checkbox" ${f.enabled?'checked':''}> Enable frame in ElvUI</label></div>`;
+ if(f.enable)html+=`<div class="property-group"><label class="check" style="margin:0"><input id="prop-enable" type="checkbox" ${f.enabled?'checked':''}> Enable frame in ${f.plugin||'ElvUI'}</label></div>`;
  html+=`<button id="apply-properties" style="margin-top:20px">Apply properties</button><div class="property-group"><h2>PROFILE SETTING</h2><code class="anchor-code">movers.${esc(f.mover)}</code></div>`;
  $('#properties').innerHTML=html;$('#selection-coords').textContent=f.rect?`${Math.round(f.w)} × ${Math.round(f.h)} UI units`:'Position unavailable';
  const inputs=[...$('#properties').querySelectorAll('input,select')];
