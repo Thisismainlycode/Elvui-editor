@@ -5406,7 +5406,10 @@ function framesFor(p, viewport2) {
     if (get(p, d.path) instanceof Map || get(p, ["movers", d.mover]) !== void 0) defs.splice(4 + n, 0, d);
   }
   if (movers instanceof Map) {
-    for (const [m] of movers) if (typeof m === "string" && !defs.some((d) => d.mover === m)) defs.push({ id: m, label: m, kind: "unknown", mover: m, w: 160, h: 40, x: 0, y: 0 });
+    for (const [m] of movers) if (typeof m === "string" && !defs.some((d) => d.mover === m)) {
+      const label = m.replace(/Mover$/, "").replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim() || m;
+      defs.push({ id: m, label, kind: "anchor", mover: m, w: 12, h: 12, x: 0, y: 0, anchorOnly: true });
+    }
   }
   const frames2 = defs.map((d) => {
     const raw = get(p, ["movers", d.mover]), dims = dimensions(p, d), layout = d.kind === "bar" ? actionBarLayout(p, d) : null;
@@ -5438,7 +5441,13 @@ function framesFor(p, viewport2) {
       f.warning = f.warning || `Relative frame ${m.parent} cannot be previewed. Position is retained.`;
       return null;
     }
-    const a = anchorFraction(m.anchor), b = anchorFraction(m.relative), left = parent.left + parent.w * b[0] + m.x - f.moverW * a[0], top = parent.top + parent.h * b[1] - m.y - f.moverH * a[1];
+    const a = anchorFraction(m.anchor), b = anchorFraction(m.relative), anchorX = parent.left + parent.w * b[0] + m.x, anchorY = parent.top + parent.h * b[1] - m.y;
+    if (f.anchorOnly) {
+      const left2 = anchorX - f.w / 2, top2 = anchorY - f.h / 2;
+      f.anchorRect = f.rect = { left: left2, top: top2, w: f.w, h: f.h };
+      return f.anchorRect;
+    }
+    const left = anchorX - f.moverW * a[0], top = anchorY - f.moverH * a[1];
     f.anchorRect = { left, top, w: f.moverW, h: f.moverH };
     f.rect = { left: left + f.inset, top: top + f.inset, w: f.w, h: f.h };
     return f.anchorRect;
@@ -5524,10 +5533,10 @@ function render() {
   const view = viewport();
   frames = framesFor(profile, view);
   if (!selectedFrame()) selected = frames[0].id;
-  const showUnsupported = $("#show-unsupported").checked, unsupported = frames.filter((f) => f.kind === "unknown"), visible = showUnsupported ? frames : frames.filter((f) => f.kind !== "unknown");
+  const showCustom = $("#show-unsupported").checked, custom = frames.filter((f) => f.kind === "anchor"), visible = showCustom ? frames : frames.filter((f) => f.kind !== "anchor");
   if (!visible.some((f) => f.id === selected)) selected = visible[0]?.id || frames[0].id;
   const active = visible.filter((f) => f.enabled), off = visible.length - active.length;
-  $("#count").textContent = `${active.length} visible${off ? ` \xB7 ${off} off` : ""}${unsupported.length && !showUnsupported ? ` \xB7 ${unsupported.length} preserved` : ""}`;
+  $("#count").textContent = `${active.length} visible${off ? ` \xB7 ${off} off` : ""}${custom.length && !showCustom ? ` \xB7 ${custom.length} custom` : ""}`;
   $("#profile-status").textContent = source + (dirty ? " \xB7 Edited" : "");
   $("#undo").disabled = !history.length;
   $("#redo").disabled = !future.length;
@@ -5545,7 +5554,7 @@ function render() {
       style += `grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`;
     }
     if (f.kind === "raid") body = Array.from({ length: 25 }, () => '<span class="raid-cell"></span>').join("");
-    if (["chat", "minimap", "unknown"].includes(f.kind)) body = `<span class="frame-text">${esc(f.label)}</span>`;
+    if (["chat", "minimap", "anchor"].includes(f.kind)) body = `<span class="frame-text">${esc(f.label)}</span>`;
     return `<button class="frame ${f.kind} ${f.resize && f.kind !== "minimap" ? "power" : ""} ${f.id === selected ? "selected" : ""}" data-id="${esc(f.id)}" data-label="${esc(f.label)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id === selected && f.resize ? '<span class="handle" aria-hidden="true"></span>' : ""}</button>`;
   }).join("");
   renderProperties();
@@ -5554,15 +5563,16 @@ var field = (label, id, value, min = -99999, max2 = 99999) => `<label class="fie
 function renderProperties() {
   const f = selectedFrame(), m = f.moverData || { anchor: "CENTER", parent: "UIParent", relative: "CENTER", x: f.x, y: f.y };
   $("#frame-title").textContent = f.label;
-  $("#frame-kind").textContent = f.kind === "unknown" ? "CUSTOM MOVER" : f.kind.toUpperCase();
-  $("#frame-description").textContent = f.estimated ? "Estimated position \xB7 no saved mover" : f.kind === "raid" ? "Approximate group footprint" : "Position and dimensions";
+  $("#frame-kind").textContent = f.kind === "anchor" ? "CUSTOM ANCHOR" : f.kind.toUpperCase();
+  $("#frame-description").textContent = f.kind === "anchor" ? "Editable anchor \xB7 frame size is not simulated" : f.estimated ? "Estimated position \xB7 no saved mover" : f.kind === "raid" ? "Approximate group footprint" : "Position and dimensions";
   let html = "";
   if (f.warning) html += `<p class="readonly-note">${esc(f.warning)}</p>`;
   else html += `<div class="property-group"><h2>POSITION \xB7 UI UNITS</h2><div class="field-row">${field("X offset", "prop-x", m.x)}${field("Y offset", "prop-y", m.y)}</div><label class="field">Frame anchor<select id="prop-anchor">${ANCHORS.map((a) => `<option ${a === m.anchor ? "selected" : ""}>${a}</option>`).join("")}</select></label><p class="anchor-code">Relative to ${esc(m.parent)} \xB7 ${esc(m.relative)}<br>Positive Y moves upward.</p></div>`;
   if (f.resize) html += `<div class="property-group"><h2>DIMENSIONS</h2><div class="field-row">${field(f.kind === "minimap" ? "Size" : "Width", "prop-width", f.w, 10, 2e3)}${f.kind === "minimap" ? "" : field("Height", "prop-height", f.h, 10, 2e3)}</div></div>`;
   if (f.kind === "bar") html += `<div class="property-group"><h2>BUTTON LAYOUT</h2><div class="field-row">${field("Buttons", "prop-buttons", get(profile, [...f.path, "buttons"], 12), 1, 12)}${field("Per row", "prop-cols", get(profile, [...f.path, "buttonsPerRow"], 12), 1, 12)}${field("Size", "prop-size", get(profile, [...f.path, "buttonSize"], 34), 16, 100)}${field("Spacing", "prop-gap", get(profile, [...f.path, "buttonSpacing"], 2), 0, 30)}</div></div>`;
   if (f.kind === "chat") html += '<p class="muted">Chat panel size is previewed from your profile. This version edits its position only.</p>';
-  if (f.kind === "raid" || f.kind === "unknown") html += '<p class="muted">The group or plugin footprint is a placeholder. Only its saved mover position is editable.</p>';
+  if (f.kind === "raid") html += '<p class="muted">The group footprint is a placeholder. Only its saved mover position is editable.</p>';
+  if (f.kind === "anchor") html += '<p class="muted">This marker represents the exact saved anchor point. The add-on frame size is unknown, so no panel footprint is invented.</p>';
   if (f.enable) html += `<div class="property-group"><label class="check" style="margin:0"><input id="prop-enable" type="checkbox" ${f.enabled ? "checked" : ""}> Enable frame in ElvUI</label></div>`;
   html += `<button id="apply-properties" style="margin-top:20px">Apply properties</button><div class="property-group"><h2>PROFILE SETTING</h2><code class="anchor-code">movers.${esc(f.mover)}</code></div>`;
   $("#properties").innerHTML = html;
@@ -5674,7 +5684,7 @@ $("#grid").onchange = render;
 $("#snap").onchange = () => status($("#snap").checked ? "4-unit snapping enabled for dragging and resizing" : "Snapping disabled; imported coordinates are unchanged");
 $("#show-unsupported").onchange = () => {
   render();
-  status($("#show-unsupported").checked ? "Unsupported anchors shown as approximate placeholders" : "Unsupported anchors hidden; their profile data is still preserved");
+  status($("#show-unsupported").checked ? "Custom anchors shown as editable markers" : "Custom anchors hidden; their profile data is still preserved");
 };
 $("#resolution").onchange = () => {
   render();
@@ -5705,7 +5715,7 @@ function dialog(html) {
   if (!$("#dialog").open) $("#dialog").showModal();
 }
 function showHelp() {
-  dialog(`<h2>Your UI, outside the game</h2><p>Import \u2192 arrange \u2192 export. All profile processing happens in your browser. Imported files are not uploaded.</p><p class="notice">WoW: Forever is the intended target. This editor currently uses Retail ElvUI settings. Forever support and in-game round-trip compatibility have not yet been verified.</p><p>Supported inputs: current <code>!E2!</code> and legacy <code>!E1!</code> character profile strings, ElvUI Lua table profile exports, and account <code>SavedVariables/ElvUI.lua</code> files.</p><p>Find your backup under your WoW installation \u2192 <code>WTF/Account/&lt;account&gt;/SavedVariables/ElvUI.lua</code>. The game-version folder depends on your installation. Keep the original backup.</p><p>The canvas is approximate. Absent mover positions use this editor\u2019s estimates, not an exact reproduction of ElvUI defaults. Raid groups and unknown movers use placeholder dimensions. Plugins, fonts, textures, private/global settings, and combat behavior are not simulated.</p><p>Viewport and UI scale affect the preview only. Editing a frame by dragging anchors it to the center of UIParent. Unresolved relative anchors are preserved and not moved.</p><p><a href="https://github.com/tukui-org/ElvUI/blob/main/ElvUI/Game/Shared/General/Distributor.lua" target="_blank" rel="noopener">ElvUI import/export source</a> \xB7 <a href="https://github.com/tukui-org/ElvUI/wiki/export" target="_blank" rel="noopener">ElvUI profile guide</a></p>`);
+  dialog(`<h2>Your UI, outside the game</h2><p>Import \u2192 arrange \u2192 export. All profile processing happens in your browser. Imported files are not uploaded.</p><p class="notice">WoW: Forever is the intended target. This editor currently uses Retail ElvUI settings. Forever support and in-game round-trip compatibility have not yet been verified.</p><p>Supported inputs: current <code>!E2!</code> and legacy <code>!E1!</code> character profile strings, ElvUI Lua table profile exports, and account <code>SavedVariables/ElvUI.lua</code> files.</p><p>Find your backup under your WoW installation \u2192 <code>WTF/Account/&lt;account&gt;/SavedVariables/ElvUI.lua</code>. The game-version folder depends on your installation. Keep the original backup.</p><p>The canvas is approximate. Absent mover positions use this editor\u2019s estimates, not an exact reproduction of ElvUI defaults. Custom and plugin movers are editable anchor markers when their frame dimensions are unknown. Plugins, fonts, textures, private/global settings, and combat behavior are not simulated.</p><p>Viewport and UI scale affect the preview only. Editing a frame by dragging anchors it to the center of UIParent. Unresolved relative anchors are preserved and not moved.</p><p><a href="https://github.com/tukui-org/ElvUI/blob/main/ElvUI/Game/Shared/General/Distributor.lua" target="_blank" rel="noopener">ElvUI import/export source</a> \xB7 <a href="https://github.com/tukui-org/ElvUI/wiki/export" target="_blank" rel="noopener">ElvUI profile guide</a></p>`);
 }
 $("#help").onclick = showHelp;
 $("#import").onclick = () => {

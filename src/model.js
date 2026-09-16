@@ -19,7 +19,7 @@ export function dimensions(p,d){
  return {w:typeof w==='number'&&w>0?Math.min(w,8000):d.w,h:typeof h==='number'&&h>0?Math.min(h,8000):d.h};
 }
 export function framesFor(p,viewport){
- const defs=[...DEFINITIONS],movers=get(p,['movers']);for(const n of ACTION_BAR_IDS.slice(2)){const d=bar(n,n===4?900:n>=6?850:0,n===3?-280:n===4?0:n===5?-370:140+(n-6)*38);if(get(p,d.path)instanceof Map||get(p,['movers',d.mover])!==undefined)defs.splice(4+n,0,d);}if(movers instanceof Map)for(const [m]of movers)if(typeof m==='string'&&!defs.some(d=>d.mover===m))defs.push({id:m,label:m,kind:'unknown',mover:m,w:160,h:40,x:0,y:0});
+ const defs=[...DEFINITIONS],movers=get(p,['movers']);for(const n of ACTION_BAR_IDS.slice(2)){const d=bar(n,n===4?900:n>=6?850:0,n===3?-280:n===4?0:n===5?-370:140+(n-6)*38);if(get(p,d.path)instanceof Map||get(p,['movers',d.mover])!==undefined)defs.splice(4+n,0,d);}if(movers instanceof Map)for(const [m]of movers)if(typeof m==='string'&&!defs.some(d=>d.mover===m)){const label=m.replace(/Mover$/,'').replace(/[_-]+/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').trim()||m;defs.push({id:m,label,kind:'anchor',mover:m,w:12,h:12,x:0,y:0,anchorOnly:true});}
  const frames=defs.map(d=>{const raw=get(p,['movers',d.mover]),dims=dimensions(p,d),layout=d.kind==='bar'?actionBarLayout(p,d):null;return {...d,...dims,moverW:layout?.moverW??dims.w,moverH:layout?.moverH??dims.h,inset:layout?.inset??0,enabled:d.enable?get(p,[...d.path,d.enableKey||'enable'],d.defaultEnabled??true)!==false:true,moverData:parseMover(raw),raw,estimated:raw===undefined};});
  const roots=['UIParent','ElvUIParent'];
  function resolve(f,seen=new Set()){
@@ -27,7 +27,7 @@ export function framesFor(p,viewport){
   let m=f.moverData;if(!m){if(f.raw!==undefined){f.warning='Unrecognized mover format; retained without changes.';return null;}m={anchor:'CENTER',parent:'UIParent',relative:'CENTER',x:f.x,y:f.y};}
   let parent;if(roots.includes(m.parent))parent={left:0,top:0,w:viewport.w,h:viewport.h};else{const other=frames.find(x=>x.mover===m.parent);if(other)parent=resolve(other,seen);}
   if(!parent){f.warning=f.warning||`Relative frame ${m.parent} cannot be previewed. Position is retained.`;return null;}
-  const a=anchorFraction(m.anchor),b=anchorFraction(m.relative),left=parent.left+parent.w*b[0]+m.x-f.moverW*a[0],top=parent.top+parent.h*b[1]-m.y-f.moverH*a[1];f.anchorRect={left,top,w:f.moverW,h:f.moverH};f.rect={left:left+f.inset,top:top+f.inset,w:f.w,h:f.h};return f.anchorRect;
+  const a=anchorFraction(m.anchor),b=anchorFraction(m.relative),anchorX=parent.left+parent.w*b[0]+m.x,anchorY=parent.top+parent.h*b[1]-m.y;if(f.anchorOnly){const left=anchorX-f.w/2,top=anchorY-f.h/2;f.anchorRect=f.rect={left,top,w:f.w,h:f.h};return f.anchorRect;}const left=anchorX-f.moverW*a[0],top=anchorY-f.moverH*a[1];f.anchorRect={left,top,w:f.moverW,h:f.moverH};f.rect={left:left+f.inset,top:top+f.inset,w:f.w,h:f.h};return f.anchorRect;
  }
  for(const f of frames)resolve(f);return frames;
 }
