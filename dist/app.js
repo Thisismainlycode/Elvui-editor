@@ -5417,17 +5417,20 @@ function benikUIDashboardHeight(p, key) {
   return orientation === "BOTTOM" ? 23 * Math.max(1, rows) + 3 : 23;
 }
 function benikUIDefinitions(p) {
-  const movers = get(p, ["movers"]), bui = get(p, ["benikui"]), hasBui = bui instanceof Map, defs = [];
+  const movers = get(p, ["movers"]), bui = get(p, ["benikui"]), defs = [];
   const add = (d) => {
-    if (hasBui || get(movers, [d.mover]) !== void 0) defs.push({ ...d, plugin: "BenikUI" });
+    if (get(movers, [d.mover]) !== void 0) defs.push({ ...d, plugin: "BenikUI" });
   };
   for (const [unitId, label] of BENIKUI_PORTRAITS) {
     const path = ["benikui", "unitframes", unitId], dimensionPath = unitId === "target" && get(p, [...path, "getPlayerPortraitSize"], true) !== false ? ["benikui", "unitframes", "player"] : path;
     add({ id: `benikui-portrait-${unitId}`, label: `${label} portrait`, mover: `${unitId === "targettarget" ? "TargetTarget" : label}PortraitMover`, kind: "benikui", subkind: "portrait", path, dimensionPath, widthKey: "portraitWidth", heightKey: "portraitHeight", enable: true, enableKey: "detachPortrait", defaultEnabled: false, resize: true, w: 110, h: 85, x: unitId === "player" ? -460 : 460, y: -180 });
   }
   for (const [key, mover, label, width] of BENIKUI_DASHBOARDS) {
-    const path = ["benikui", "dashboards", key], orientation = get(p, [...path, "orientation"], "BOTTOM"), rows = key === "system" ? get(p, [...path, "chooseSystem"]) instanceof Map ? [...get(p, [...path, "chooseSystem"]).values()].filter(Boolean).length : 5 : 1, w = get(p, [...path, "width"], width), h = benikUIDashboardHeight(p, key);
-    add({ id: `benikui-dashboard-${key}`, label, mover, kind: "benikui", subkind: "dashboard", path, enable: true, defaultEnabled: true, w: orientation === "BOTTOM" ? w : w * Math.max(1, rows) + (Math.max(1, rows) - 1) * get(p, [...path, "spacing"], 1), h, x: -750, y: 360 });
+    const path = ["benikui", "dashboards", key];
+    if (key === "system") {
+      const orientation = get(p, [...path, "orientation"], "BOTTOM"), rows = get(p, [...path, "chooseSystem"]) instanceof Map ? [...get(p, [...path, "chooseSystem"]).values()].filter(Boolean).length : 5, w = get(p, [...path, "width"], width), h = benikUIDashboardHeight(p, key);
+      add({ id: `benikui-dashboard-${key}`, label, mover, kind: "benikui", subkind: "dashboard", path, enable: true, defaultEnabled: true, w: orientation === "BOTTOM" ? w : w * Math.max(1, rows) + (Math.max(1, rows) - 1) * get(p, [...path, "spacing"], 1), h, x: -750, y: 360 });
+    } else add({ id: `benikui-dashboard-${key}`, label, mover, kind: "anchor", subkind: "dynamic dashboard", path, enable: true, defaultEnabled: true, w: 12, h: 12, x: 0, y: 0, anchorOnly: true });
   }
   add({ id: "benikui-request-stop", label: "Request stop button", mover: "RequestStopButton", kind: "benikui", subkind: "button", path: ["benikui", "actionbars"], enable: true, enableKey: "requestStop", defaultEnabled: true, w: 240, h: 40, x: 0, y: 390 });
   for (const [key, mover, label, y] of [["mawBar", "BUIMawBarMover", "Maw bar", 365], ["preyBar", "BUIPreyBarMover", "Prey bar", 390]]) add({ id: `benikui-${key}`, label, mover, kind: "benikui", subkind: "widgetbar", path: ["benikui", "widgetbars", key], enable: true, defaultEnabled: true, resize: true, w: get(p, ["benikui", "widgetbars", key, "width"], 222), h: get(p, ["benikui", "widgetbars", key, "height"], 5), x: 0, y });
@@ -5606,8 +5609,8 @@ var field = (label, id, value, min = -99999, max2 = 99999) => `<label class="fie
 function renderProperties() {
   const f = selectedFrame(), m = f.moverData || { anchor: "CENTER", parent: "UIParent", relative: "CENTER", x: f.x, y: f.y };
   $("#frame-title").textContent = f.label;
-  $("#frame-kind").textContent = f.kind === "anchor" ? "CUSTOM ANCHOR" : f.plugin ? f.plugin.toUpperCase() : f.kind.toUpperCase();
-  $("#frame-description").textContent = f.kind === "anchor" ? "Editable anchor \xB7 frame size is not simulated" : f.kind === "benikui" ? `BenikUI ${f.subkind} \xB7 source-backed footprint` : f.estimated ? "Estimated position \xB7 no saved mover" : f.kind === "raid" ? "Approximate group footprint" : "Position and dimensions";
+  $("#frame-kind").textContent = f.kind === "anchor" ? f.plugin ? `${f.plugin.toUpperCase()} ANCHOR` : "CUSTOM ANCHOR" : f.plugin ? f.plugin.toUpperCase() : f.kind.toUpperCase();
+  $("#frame-description").textContent = f.kind === "anchor" ? f.plugin ? `${f.plugin} ${f.subkind} \xB7 dynamic footprint` : "Editable anchor \xB7 frame size is not simulated" : f.kind === "benikui" ? `BenikUI ${f.subkind} \xB7 source-backed footprint` : f.estimated ? "Estimated position \xB7 no saved mover" : f.kind === "raid" ? "Approximate group footprint" : "Position and dimensions";
   let html = "";
   if (f.warning) html += `<p class="readonly-note">${esc(f.warning)}</p>`;
   else html += `<div class="property-group"><h2>POSITION \xB7 UI UNITS</h2><div class="field-row">${field("X offset", "prop-x", m.x)}${field("Y offset", "prop-y", m.y)}</div><label class="field">Frame anchor<select id="prop-anchor">${ANCHORS.map((a) => `<option ${a === m.anchor ? "selected" : ""}>${a}</option>`).join("")}</select></label><p class="anchor-code">Relative to ${esc(m.parent)} \xB7 ${esc(m.relative)}<br>Positive Y moves upward.</p></div>`;
@@ -5615,7 +5618,7 @@ function renderProperties() {
   if (f.kind === "bar") html += `<div class="property-group"><h2>BUTTON LAYOUT</h2><div class="field-row">${field("Buttons", "prop-buttons", get(profile, [...f.path, "buttons"], 12), 1, 12)}${field("Per row", "prop-cols", get(profile, [...f.path, "buttonsPerRow"], 12), 1, 12)}${field("Size", "prop-size", get(profile, [...f.path, "buttonSize"], 34), 16, 100)}${field("Spacing", "prop-gap", get(profile, [...f.path, "buttonSpacing"], 2), 0, 30)}</div></div>`;
   if (f.kind === "chat") html += '<p class="muted">Chat panel size is previewed from your profile. This version edits its position only.</p>';
   if (f.kind === "raid") html += '<p class="muted">The group footprint is a placeholder. Only its saved mover position is editable.</p>';
-  if (f.kind === "anchor") html += '<p class="muted">This marker represents the exact saved anchor point. The add-on frame size is unknown, so no panel footprint is invented.</p>';
+  if (f.kind === "anchor") html += `<p class="muted">This marker represents the exact saved anchor point. ${f.plugin ? "Its size depends on live game or character data, so the editor does not invent a panel footprint." : "The add-on frame size is unknown, so no panel footprint is invented."}</p>`;
   if (f.enable) html += `<div class="property-group"><label class="check" style="margin:0"><input id="prop-enable" type="checkbox" ${f.enabled ? "checked" : ""}> Enable frame in ${f.plugin || "ElvUI"}</label></div>`;
   html += `<button id="apply-properties" style="margin-top:20px">Apply properties</button><div class="property-group"><h2>PROFILE SETTING</h2><code class="anchor-code">movers.${esc(f.mover)}</code></div>`;
   $("#properties").innerHTML = html;
