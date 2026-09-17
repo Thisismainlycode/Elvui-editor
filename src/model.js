@@ -57,5 +57,6 @@ export function framesFor(p,viewport){
  for(const f of frames)resolve(f);return frames;
 }
 export function moveFrame(p,f,left,top,viewport){if(f.warning)throw Error(f.warning);const x=Math.round(left+f.w/2-viewport.w/2),y=Math.round(viewport.h/2-top-f.h/2);set(p,['movers',f.mover],`CENTER,UIParent,CENTER,${x},${y}`);}
+export function swapPositions(p,a,b){const rawA=get(p,['movers',a.mover])??`CENTER,UIParent,CENTER,${a.x},${a.y}`,rawB=get(p,['movers',b.mover])??`CENTER,UIParent,CENTER,${b.x},${b.y}`;set(p,['movers',a.mover],rawB);set(p,['movers',b.mover],rawA);}
 export function resizeFrame(p,f,w,h){if(!f.resize)throw Error('This frame does not support resizing.');if(!Number.isFinite(w)||!Number.isFinite(h)||w<10||h<10||w>2000||h>2000)throw Error('Dimensions must be between 10 and 2000 UI units.');const path=f.dimensionPath||f.path;if(f.kind==='minimap')set(p,[...path,'size'],Math.round(w));else{set(p,[...path,f.widthKey||'width'],Math.round(w));set(p,[...path,f.heightKey||'height'],Math.round(h));}}
 export {get,set,clone};

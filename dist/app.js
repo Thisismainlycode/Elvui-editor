@@ -5505,6 +5505,11 @@ function moveFrame(p, f, left, top, viewport2) {
   const x = Math.round(left + f.w / 2 - viewport2.w / 2), y = Math.round(viewport2.h / 2 - top - f.h / 2);
   set(p, ["movers", f.mover], `CENTER,UIParent,CENTER,${x},${y}`);
 }
+function swapPositions(p, a, b) {
+  const rawA = get(p, ["movers", a.mover]) ?? `CENTER,UIParent,CENTER,${a.x},${a.y}`, rawB = get(p, ["movers", b.mover]) ?? `CENTER,UIParent,CENTER,${b.x},${b.y}`;
+  set(p, ["movers", a.mover], rawB);
+  set(p, ["movers", b.mover], rawA);
+}
 function resizeFrame(p, f, w, h) {
   if (!f.resize) throw Error("This frame does not support resizing.");
   if (!Number.isFinite(w) || !Number.isFinite(h) || w < 10 || h < 10 || w > 2e3 || h > 2e3) throw Error("Dimensions must be between 10 and 2000 UI units.");
@@ -5616,6 +5621,10 @@ function renderProperties() {
   else html += `<div class="property-group"><h2>POSITION \xB7 UI UNITS</h2><div class="field-row">${field("X offset", "prop-x", m.x)}${field("Y offset", "prop-y", m.y)}</div><label class="field">Frame anchor<select id="prop-anchor">${ANCHORS.map((a) => `<option ${a === m.anchor ? "selected" : ""}>${a}</option>`).join("")}</select></label><p class="anchor-code">Relative to ${esc(m.parent)} \xB7 ${esc(m.relative)}<br>Positive Y moves upward.</p></div>`;
   if (f.resize) html += `<div class="property-group"><h2>DIMENSIONS</h2><div class="field-row">${field(f.kind === "minimap" ? "Size" : "Width", "prop-width", f.w, 10, 2e3)}${f.kind === "minimap" ? "" : field("Height", "prop-height", f.h, 10, 2e3)}</div></div>`;
   if (f.kind === "bar") html += `<div class="property-group"><h2>BUTTON LAYOUT</h2><div class="field-row">${field("Buttons", "prop-buttons", get(profile, [...f.path, "buttons"], 12), 1, 12)}${field("Per row", "prop-cols", get(profile, [...f.path, "buttonsPerRow"], 12), 1, 12)}${field("Size", "prop-size", get(profile, [...f.path, "buttonSize"], 34), 16, 100)}${field("Spacing", "prop-gap", get(profile, [...f.path, "buttonSpacing"], 2), 0, 30)}</div></div>`;
+  if (f.kind === "bar") {
+    const others = frames.filter((x) => x.kind === "bar" && x.id !== f.id);
+    if (others.length) html += `<div class="property-group"><h2>SWAP</h2><label class="field">Swap position with<select id="prop-swap-target">${others.map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join("")}</select></label><p class="muted">Exchanges saved positions only; each bar keeps its own buttons and keybinds.</p><button id="swap-bars" type="button">Swap positions</button></div>`;
+  }
   if (f.kind === "chat") html += '<p class="muted">Chat panel size is previewed from your profile. This version edits its position only.</p>';
   if (f.kind === "raid") html += '<p class="muted">The group footprint is a placeholder. Only its saved mover position is editable.</p>';
   if (f.kind === "anchor") html += `<p class="muted">This marker represents the exact saved anchor point. ${f.plugin ? "Its size depends on live game or character data, so the editor does not invent a panel footprint." : "The add-on frame size is unknown, so no panel footprint is invented."}</p>`;
@@ -5649,6 +5658,11 @@ function renderProperties() {
   };
   $("#apply-properties").onclick = () => applyProperties();
   for (const input of inputs) input.addEventListener("change", () => applyProperties());
+  if ($("#swap-bars")) $("#swap-bars").onclick = () => {
+    const target2 = frames.find((x) => x.id === $("#prop-swap-target").value);
+    if (!target2) return;
+    mutate(() => swapPositions(profile, f, target2), `${f.label} and ${target2.label} swapped`);
+  };
 }
 $("#layers").addEventListener("click", (e) => {
   const b = e.target.closest("[data-id]");
