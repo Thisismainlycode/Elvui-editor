@@ -5632,7 +5632,7 @@ function renderProperties() {
   html += `<button id="apply-properties" style="margin-top:20px">Apply properties</button><div class="property-group"><h2>PROFILE SETTING</h2><code class="anchor-code">movers.${esc(f.mover)}</code></div>`;
   $("#properties").innerHTML = html;
   $("#selection-coords").textContent = f.rect ? `${Math.round(f.w)} \xD7 ${Math.round(f.h)} UI units` : "Position unavailable";
-  const inputs = [...$("#properties").querySelectorAll("input,select")];
+  const inputs = [...$("#properties").querySelectorAll("input,select")].filter((el) => el.id !== "prop-swap-target");
   const value = (input) => input.type === "checkbox" ? input.checked : input.type === "number" ? Number(input.value) : input.value;
   const initial = new Map(inputs.map((input) => [input.id, value(input)]));
   applyProperties = () => {

@@ -41,7 +41,7 @@ function renderProperties(){
  if(f.enable)html+=`<div class="property-group"><label class="check" style="margin:0"><input id="prop-enable" type="checkbox" ${f.enabled?'checked':''}> Enable frame in ${f.plugin||'ElvUI'}</label></div>`;
  html+=`<button id="apply-properties" style="margin-top:20px">Apply properties</button><div class="property-group"><h2>PROFILE SETTING</h2><code class="anchor-code">movers.${esc(f.mover)}</code></div>`;
  $('#properties').innerHTML=html;$('#selection-coords').textContent=f.rect?`${Math.round(f.w)} × ${Math.round(f.h)} UI units`:'Position unavailable';
- const inputs=[...$('#properties').querySelectorAll('input,select')];
+ const inputs=[...$('#properties').querySelectorAll('input,select')].filter(el=>el.id!=='prop-swap-target');
  const value=input=>input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value;
  const initial=new Map(inputs.map(input=>[input.id,value(input)]));
  applyProperties=()=>{
