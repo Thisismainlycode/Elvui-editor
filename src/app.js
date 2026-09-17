@@ -1,5 +1,5 @@
 import {parseInput,exportProfile,LIMIT} from './profile.js';
-import {newProfile,framesFor,moveFrame,resizeFrame,swapPositions,actionBarLayout,get,set,clone,ANCHORS} from './model.js';
+import {newProfile,framesFor,moveFrame,resizeFrame,swapBars,actionBarLayout,get,set,clone,ANCHORS} from './model.js';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let profile=newProfile(),name='My next adventure',selected='player',source='New layout',dirty=false,history=[],future=[],frames=[],drag=null,applyProperties=()=>true;
@@ -35,7 +35,7 @@ function renderProperties(){
  else html+=`<div class="property-group"><h2>POSITION · UI UNITS</h2><div class="field-row">${field('X offset','prop-x',m.x)}${field('Y offset','prop-y',m.y)}</div><label class="field">Frame anchor<select id="prop-anchor">${ANCHORS.map(a=>`<option ${a===m.anchor?'selected':''}>${a}</option>`).join('')}</select></label><p class="anchor-code">Relative to ${esc(m.parent)} · ${esc(m.relative)}<br>Positive Y moves upward.</p></div>`;
  if(f.resize)html+=`<div class="property-group"><h2>DIMENSIONS</h2><div class="field-row">${field(f.kind==='minimap'?'Size':'Width','prop-width',f.w,10,2000)}${f.kind==='minimap'?'':field('Height','prop-height',f.h,10,2000)}</div></div>`;
  if(f.kind==='bar')html+=`<div class="property-group"><h2>BUTTON LAYOUT</h2><div class="field-row">${field('Buttons','prop-buttons',get(profile,[...f.path,'buttons'],12),1,12)}${field('Per row','prop-cols',get(profile,[...f.path,'buttonsPerRow'],12),1,12)}${field('Size','prop-size',get(profile,[...f.path,'buttonSize'],34),16,100)}${field('Spacing','prop-gap',get(profile,[...f.path,'buttonSpacing'],2),0,30)}</div></div>`;
- if(f.kind==='bar'){const others=frames.filter(x=>x.kind==='bar'&&x.id!==f.id);if(others.length)html+=`<div class="property-group"><h2>SWAP</h2><label class="field">Swap position with<select id="prop-swap-target">${others.map(o=>`<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('')}</select></label><p class="muted">Exchanges saved positions only; each bar keeps its own buttons and keybinds.</p><button id="swap-bars" type="button">Swap positions</button></div>`;}
+ if(f.kind==='bar'){const others=frames.filter(x=>x.kind==='bar'&&x.id!==f.id);if(others.length)html+=`<div class="property-group"><h2>SWAP</h2><label class="field">Swap with<select id="prop-swap-target">${others.map(o=>`<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('')}</select></label><p class="muted">Exchanges position and button layout (buttons, columns, size, spacing, visibility) between these two bars. Keybinds live in your WoW account, not this profile, so they stay where they are.</p><button id="swap-bars" type="button">Swap bars</button></div>`;}
  if(f.kind==='chat')html+='<p class="muted">Chat panel size is previewed from your profile. This version edits its position only.</p>';
  if(f.kind==='raid')html+='<p class="muted">The group footprint is a placeholder. Only its saved mover position is editable.</p>';if(f.kind==='anchor')html+=`<p class="muted">This marker represents the exact saved anchor point. ${f.plugin?'Its size depends on live game or character data, so the editor does not invent a panel footprint.':'The add-on frame size is unknown, so no panel footprint is invented.'}</p>`;
  if(f.enable)html+=`<div class="property-group"><label class="check" style="margin:0"><input id="prop-enable" type="checkbox" ${f.enabled?'checked':''}> Enable frame in ${f.plugin||'ElvUI'}</label></div>`;
@@ -56,7 +56,7 @@ function renderProperties(){
  };
  $('#apply-properties').onclick=()=>applyProperties();
  for(const input of inputs)input.addEventListener('change',()=>applyProperties());
- if($('#swap-bars'))$('#swap-bars').onclick=()=>{const target=frames.find(x=>x.id===$('#prop-swap-target').value);if(!target)return;mutate(()=>swapPositions(profile,f,target),`${f.label} and ${target.label} swapped`);};
+ if($('#swap-bars'))$('#swap-bars').onclick=()=>{const target=frames.find(x=>x.id===$('#prop-swap-target').value);if(!target)return;mutate(()=>swapBars(profile,f,target),`${f.label} and ${target.label} swapped`);};
 }
 $('#layers').addEventListener('click',e=>{const b=e.target.closest('[data-id]');if(b&&applyProperties()){selected=b.dataset.id;render();}});
 $('#frames').addEventListener('pointerdown',e=>{

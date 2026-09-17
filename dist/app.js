@@ -5505,10 +5505,23 @@ function moveFrame(p, f, left, top, viewport2) {
   const x = Math.round(left + f.w / 2 - viewport2.w / 2), y = Math.round(viewport2.h / 2 - top - f.h / 2);
   set(p, ["movers", f.mover], `CENTER,UIParent,CENTER,${x},${y}`);
 }
-function swapPositions(p, a, b) {
+function delPath(p, path) {
+  let t = p;
+  for (const k of path.slice(0, -1)) {
+    if (!(t instanceof Map)) return;
+    t = t.get(k);
+  }
+  if (t instanceof Map) t.delete(path.at(-1));
+}
+function swapBars(p, a, b) {
   const rawA = get(p, ["movers", a.mover]) ?? `CENTER,UIParent,CENTER,${a.x},${a.y}`, rawB = get(p, ["movers", b.mover]) ?? `CENTER,UIParent,CENTER,${b.x},${b.y}`;
   set(p, ["movers", a.mover], rawB);
   set(p, ["movers", b.mover], rawA);
+  if (a.kind === "bar" && b.kind === "bar") {
+    const settingsA = get(p, a.path), settingsB = get(p, b.path);
+    settingsB !== void 0 ? set(p, a.path, clone(settingsB)) : delPath(p, a.path);
+    settingsA !== void 0 ? set(p, b.path, clone(settingsA)) : delPath(p, b.path);
+  }
 }
 function resizeFrame(p, f, w, h) {
   if (!f.resize) throw Error("This frame does not support resizing.");
@@ -5623,7 +5636,7 @@ function renderProperties() {
   if (f.kind === "bar") html += `<div class="property-group"><h2>BUTTON LAYOUT</h2><div class="field-row">${field("Buttons", "prop-buttons", get(profile, [...f.path, "buttons"], 12), 1, 12)}${field("Per row", "prop-cols", get(profile, [...f.path, "buttonsPerRow"], 12), 1, 12)}${field("Size", "prop-size", get(profile, [...f.path, "buttonSize"], 34), 16, 100)}${field("Spacing", "prop-gap", get(profile, [...f.path, "buttonSpacing"], 2), 0, 30)}</div></div>`;
   if (f.kind === "bar") {
     const others = frames.filter((x) => x.kind === "bar" && x.id !== f.id);
-    if (others.length) html += `<div class="property-group"><h2>SWAP</h2><label class="field">Swap position with<select id="prop-swap-target">${others.map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join("")}</select></label><p class="muted">Exchanges saved positions only; each bar keeps its own buttons and keybinds.</p><button id="swap-bars" type="button">Swap positions</button></div>`;
+    if (others.length) html += `<div class="property-group"><h2>SWAP</h2><label class="field">Swap with<select id="prop-swap-target">${others.map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join("")}</select></label><p class="muted">Exchanges position and button layout (buttons, columns, size, spacing, visibility) between these two bars. Keybinds live in your WoW account, not this profile, so they stay where they are.</p><button id="swap-bars" type="button">Swap bars</button></div>`;
   }
   if (f.kind === "chat") html += '<p class="muted">Chat panel size is previewed from your profile. This version edits its position only.</p>';
   if (f.kind === "raid") html += '<p class="muted">The group footprint is a placeholder. Only its saved mover position is editable.</p>';
@@ -5661,7 +5674,7 @@ function renderProperties() {
   if ($("#swap-bars")) $("#swap-bars").onclick = () => {
     const target2 = frames.find((x) => x.id === $("#prop-swap-target").value);
     if (!target2) return;
-    mutate(() => swapPositions(profile, f, target2), `${f.label} and ${target2.label} swapped`);
+    mutate(() => swapBars(profile, f, target2), `${f.label} and ${target2.label} swapped`);
   };
 }
 $("#layers").addEventListener("click", (e) => {
