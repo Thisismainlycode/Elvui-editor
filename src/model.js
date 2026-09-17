@@ -57,14 +57,18 @@ export function framesFor(p,viewport){
  for(const f of frames)resolve(f);return frames;
 }
 export function moveFrame(p,f,left,top,viewport){if(f.warning)throw Error(f.warning);const x=Math.round(left+f.w/2-viewport.w/2),y=Math.round(viewport.h/2-top-f.h/2);set(p,['movers',f.mover],`CENTER,UIParent,CENTER,${x},${y}`);}
-function delPath(p,path){let t=p;for(const k of path.slice(0,-1)){if(!(t instanceof Map))return;t=t.get(k);}if(t instanceof Map)t.delete(path.at(-1));}
+function pinBarDefaults(p,f,map){
+ const enableKey=f.enableKey||'enable',defaults={buttons:f.defaultButtons,buttonsPerRow:f.defaultCols,backdrop:f.defaultBackdrop??false,[enableKey]:f.defaultEnabled??true};
+ const out=map instanceof Map?clone(map):new Map();
+ for(const key in defaults)if(!out.has(key))out.set(key,get(p,[...f.path,key],defaults[key]));
+ return out;
+}
 export function swapBars(p,a,b){
  const rawA=get(p,['movers',a.mover])??`CENTER,UIParent,CENTER,${a.x},${a.y}`,rawB=get(p,['movers',b.mover])??`CENTER,UIParent,CENTER,${b.x},${b.y}`;
  set(p,['movers',a.mover],rawB);set(p,['movers',b.mover],rawA);
  if(a.kind==='bar'&&b.kind==='bar'){
-  const settingsA=get(p,a.path),settingsB=get(p,b.path);
-  settingsB!==undefined?set(p,a.path,clone(settingsB)):delPath(p,a.path);
-  settingsA!==undefined?set(p,b.path,clone(settingsA)):delPath(p,b.path);
+  const settingsA=pinBarDefaults(p,a,get(p,a.path)),settingsB=pinBarDefaults(p,b,get(p,b.path));
+  set(p,a.path,settingsB);set(p,b.path,settingsA);
  }
 }
 export function resizeFrame(p,f,w,h){if(!f.resize)throw Error('This frame does not support resizing.');if(!Number.isFinite(w)||!Number.isFinite(h)||w<10||h<10||w>2000||h>2000)throw Error('Dimensions must be between 10 and 2000 UI units.');const path=f.dimensionPath||f.path;if(f.kind==='minimap')set(p,[...path,'size'],Math.round(w));else{set(p,[...path,f.widthKey||'width'],Math.round(w));set(p,[...path,f.heightKey||'height'],Math.round(h));}}
