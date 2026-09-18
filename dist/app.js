@@ -5538,19 +5538,21 @@ var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt
 var profile = newProfile();
 var name = "My next adventure";
 var selected = "player";
+var group = /* @__PURE__ */ new Set(["player"]);
 var source = "New layout";
 var dirty = false;
 var history = [];
 var future = [];
 var frames = [];
 var drag = null;
+var marquee = null;
 var applyProperties = () => true;
 var viewport = () => {
   const [w, h] = $("#resolution").value.split(",").map(Number), scale = Number($("#ui-scale").value);
   return { w: w / scale, h: h / scale };
 };
 var status = (message) => $("#status").textContent = message;
-var snapshot = () => ({ profile: clone(profile), name, selected, source, dirty });
+var snapshot = () => ({ profile: clone(profile), name, selected, group: new Set(group), source, dirty });
 function pushHistory() {
   history.push(snapshot());
   if (history.length > 70) history.shift();
@@ -5558,7 +5560,7 @@ function pushHistory() {
   dirty = true;
 }
 function restore(s) {
-  ({ profile, name, selected, source, dirty } = s);
+  ({ profile, name, selected, group, source, dirty } = s);
   $("#profile-name").value = name;
   render();
 }
@@ -5591,18 +5593,31 @@ function redo() {
 function selectedFrame() {
   return frames.find((f) => f.id === selected);
 }
+function groupFrames() {
+  return [...group].map((id) => frames.find((f) => f.id === id)).filter(Boolean);
+}
+function draggableGroupFrames() {
+  return groupFrames().filter((f) => f.rect && !f.warning);
+}
+function groupBBox(members) {
+  const lefts = members.map((m) => m.rect.left), tops = members.map((m) => m.rect.top), rights = members.map((m) => m.rect.left + m.w), bottoms = members.map((m) => m.rect.top + m.h), left = Math.min(...lefts), top = Math.min(...tops);
+  return { left, top, w: Math.max(...rights) - left, h: Math.max(...bottoms) - top };
+}
 function render() {
   const view = viewport();
   frames = framesFor(profile, view);
   if (!selectedFrame()) selected = frames[0].id;
   const showCustom = $("#show-unsupported").checked, custom = frames.filter((f) => f.kind === "anchor"), visible = showCustom ? frames : frames.filter((f) => f.kind !== "anchor");
   if (!visible.some((f) => f.id === selected)) selected = visible[0]?.id || frames[0].id;
+  for (const id of [...group]) if (!visible.some((f) => f.id === id)) group.delete(id);
+  if (!group.size) group.add(selected);
+  if (!group.has(selected)) selected = [...group][0];
   const active = visible.filter((f) => f.enabled), off = visible.length - active.length;
-  $("#count").textContent = `${active.length} visible${off ? ` \xB7 ${off} off` : ""}${custom.length && !showCustom ? ` \xB7 ${custom.length} custom` : ""}`;
+  $("#count").textContent = `${active.length} visible${off ? ` \xB7 ${off} off` : ""}${custom.length && !showCustom ? ` \xB7 ${custom.length} custom` : ""}${group.size > 1 ? ` \xB7 ${group.size} selected` : ""}`;
   $("#profile-status").textContent = source + (dirty ? " \xB7 Edited" : "");
   $("#undo").disabled = !history.length;
   $("#redo").disabled = !future.length;
-  $("#layers").innerHTML = visible.map((f) => `<button class="layer ${f.id === selected ? "active" : ""}" data-id="${esc(f.id)}" aria-pressed="${f.id === selected}"><span>${esc(f.label)}</span><small>${f.warning ? "!" : f.enabled ? "\u25C7" : "off"}</small></button>`).join("");
+  $("#layers").innerHTML = visible.map((f) => `<button class="layer ${f.id === selected ? "active" : group.has(f.id) ? "grouped" : ""}" data-id="${esc(f.id)}" aria-pressed="${group.has(f.id)}"><span>${esc(f.label)}</span><small>${f.warning ? "!" : f.enabled ? "\u25C7" : "off"}</small></button>`).join("");
   $("#stage").style.aspectRatio = `${view.w}/${view.h}`;
   $("#stage").style.width = `${$("#canvas-zoom").value}%`;
   $("#stage").style.backgroundSize = `${40 / view.w * 100}% ${40 / view.h * 100}%`;
@@ -5617,12 +5632,30 @@ function render() {
     }
     if (f.kind === "raid") body = Array.from({ length: 25 }, () => '<span class="raid-cell"></span>').join("");
     if (["chat", "minimap", "anchor", "benikui"].includes(f.kind)) body = `<span class="frame-text">${esc(f.label)}</span>`;
-    return `<button class="frame ${f.kind} ${f.resize && f.kind !== "minimap" ? "power" : ""} ${f.id === selected ? "selected" : ""}" data-id="${esc(f.id)}" data-label="${esc(f.label)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id === selected && f.resize ? '<span class="handle" aria-hidden="true"></span>' : ""}</button>`;
+    const cls = f.id === selected ? "selected" : group.has(f.id) ? "group-selected" : "";
+    return `<button class="frame ${f.kind} ${f.resize && f.kind !== "minimap" ? "power" : ""} ${cls}" data-id="${esc(f.id)}" data-label="${esc(f.label)}" style="${style}" aria-label="${esc(f.label)}, drag or use arrow keys to move">${body}${f.id === selected && f.resize && group.size <= 1 ? '<span class="handle" aria-hidden="true"></span>' : ""}</button>`;
   }).join("");
   renderProperties();
 }
 var field = (label, id, value, min = -99999, max2 = 99999) => `<label class="field">${label}<input id="${id}" type="number" min="${min}" max="${max2}" step="1" value="${Number(value)}" required></label>`;
+function renderGroupProperties() {
+  const members = groupFrames(), movable = members.filter((f) => f.rect && !f.warning);
+  $("#frame-title").textContent = `${members.length} frames selected`;
+  $("#frame-kind").textContent = "GROUP";
+  $("#frame-description").textContent = "Drag any selected frame on the canvas to move the group together.";
+  $("#properties").innerHTML = `<div class="property-group"><h2>SELECTED</h2><p class="muted">${esc(members.map((f) => f.label).join(", "))}</p></div><div class="property-group"><h2>GROUP MOVE</h2><p class="muted">Drag any of the selected frames to move all ${movable.length} of them together, keeping their relative positions. Snapping (if enabled) aligns the group as one unit using its overall bounding box and center point, not each frame separately.</p>${movable.length < members.length ? `<p class="muted">${members.length - movable.length} selected frame(s) have no adjustable position and won't move with the group.</p>` : ""}</div><button id="clear-group" type="button">Clear selection</button>`;
+  $("#selection-coords").textContent = `${movable.length} of ${members.length} movable`;
+  applyProperties = () => true;
+  $("#clear-group").onclick = () => {
+    group = /* @__PURE__ */ new Set([selected]);
+    render();
+  };
+}
 function renderProperties() {
+  if (group.size > 1) {
+    renderGroupProperties();
+    return;
+  }
   const f = selectedFrame(), m = f.moverData || { anchor: "CENTER", parent: "UIParent", relative: "CENTER", x: f.x, y: f.y };
   $("#frame-title").textContent = f.label;
   $("#frame-kind").textContent = f.kind === "anchor" ? f.plugin ? `${f.plugin.toUpperCase()} ANCHOR` : "CUSTOM ANCHOR" : f.plugin ? f.plugin.toUpperCase() : f.kind.toUpperCase();
@@ -5677,19 +5710,58 @@ function renderProperties() {
 }
 $("#layers").addEventListener("click", (e) => {
   const b = e.target.closest("[data-id]");
-  if (b && applyProperties()) {
-    selected = b.dataset.id;
-    render();
+  if (!b) return;
+  if (!applyProperties()) return;
+  const id = b.dataset.id;
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    if (group.has(id) && group.size > 1) group.delete(id);
+    else group.add(id);
+    selected = group.has(id) ? id : [...group][0];
+  } else {
+    group = /* @__PURE__ */ new Set([id]);
+    selected = id;
   }
+  render();
 });
 $("#frames").addEventListener("pointerdown", (e) => {
   const b = e.target.closest("[data-id]");
   if (!b || e.button !== 0) return;
-  selected = b.dataset.id;
-  const f = frames.find((f2) => f2.id === selected);
-  if (!f?.rect) return;
-  drag = { startX: e.clientX, startY: e.clientY, frame: clone(f), original: snapshot(), resize: e.target.classList.contains("handle"), moved: false };
+  const id = b.dataset.id, resizeHandle = e.target.classList.contains("handle");
+  if (resizeHandle) {
+    selected = id;
+    group = /* @__PURE__ */ new Set([id]);
+    const f = frames.find((x) => x.id === id);
+    if (!f?.rect) return;
+    drag = { startX: e.clientX, startY: e.clientY, resize: true, resizeFrame: clone(f), members: [], original: snapshot(), moved: false };
+    render();
+    $("#stage").setPointerCapture(e.pointerId);
+    e.preventDefault();
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    if (group.has(id) && group.size > 1) group.delete(id);
+    else group.add(id);
+    selected = group.has(id) ? id : [...group][0];
+    render();
+    e.preventDefault();
+    return;
+  }
+  if (!group.has(id)) group = /* @__PURE__ */ new Set([id]);
+  selected = id;
+  const members = [...group].map((gid) => frames.find((x) => x.id === gid)).filter((f) => f?.rect && !f.warning);
+  if (!members.length) {
+    render();
+    return;
+  }
+  const bbox = groupBBox(members);
+  drag = { startX: e.clientX, startY: e.clientY, resize: false, resizeFrame: null, members: members.map((m) => ({ id: m.id, frame: clone(m) })), bbox, original: snapshot(), moved: false };
   render();
+  $("#stage").setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+$("#stage").addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.target.closest("[data-id]")) return;
+  marquee = { startX: e.clientX, startY: e.clientY, additive: e.ctrlKey || e.metaKey || e.shiftKey, moved: false };
   $("#stage").setPointerCapture(e.pointerId);
   e.preventDefault();
 });
@@ -5726,6 +5798,15 @@ function renderGuides(guideX, guideY, v) {
   $("#guides").innerHTML = html;
 }
 $("#stage").addEventListener("pointermove", (e) => {
+  if (marquee) {
+    const rect2 = $("#stage").getBoundingClientRect();
+    const x1 = Math.min(marquee.startX, e.clientX), x2 = Math.max(marquee.startX, e.clientX), y1 = Math.min(marquee.startY, e.clientY), y2 = Math.max(marquee.startY, e.clientY);
+    if (!marquee.moved && x2 - x1 + (y2 - y1) < 3) return;
+    marquee.moved = true;
+    marquee.rect = { left: x1, top: y1, right: x2, bottom: y2 };
+    $("#marquee").style.cssText = `display:block;left:${x1 - rect2.left}px;top:${y1 - rect2.top}px;width:${x2 - x1}px;height:${y2 - y1}px;`;
+    return;
+  }
   if (!drag) return;
   const rect = $("#stage").getBoundingClientRect(), v = viewport(), dx = (e.clientX - drag.startX) / rect.width * v.w, dy = (e.clientY - drag.startY) / rect.height * v.h;
   if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
@@ -5733,12 +5814,14 @@ $("#stage").addEventListener("pointermove", (e) => {
     pushHistory();
     drag.moved = true;
   }
-  const snap = (n) => $("#snap").checked ? Math.round(n / 4) * 4 : Math.round(n), f = drag.frame;
+  const snap = (n) => $("#snap").checked ? Math.round(n / 4) * 4 : Math.round(n);
   try {
     if (drag.resize) {
+      const f = drag.resizeFrame;
       resizeFrame(profile, f, Math.max(10, Math.min(2e3, snap(f.w + dx))), Math.max(10, Math.min(2e3, snap(f.h + dy))));
       renderGuides(null, null, v);
-    } else {
+    } else if (drag.members.length === 1) {
+      const f = drag.members[0].frame;
       let left = f.rect.left + dx, top = f.rect.top + dy, guideX = null, guideY = null;
       if ($("#snap").checked) {
         const s = frameSnap(f, left, top, frames.filter((x) => x.id !== f.id && x.rect));
@@ -5752,6 +5835,30 @@ $("#stage").addEventListener("pointermove", (e) => {
         } else top = snap(top);
       }
       moveFrame(profile, f, left, top, v);
+      renderGuides(guideX, guideY, v);
+    } else {
+      const bbox = drag.bbox, memberIds = new Set(drag.members.map((m) => m.id));
+      let left = bbox.left + dx, top = bbox.top + dy, guideX = null, guideY = null;
+      if ($("#snap").checked) {
+        const others = frames.filter((x) => !memberIds.has(x.id) && x.rect);
+        const s = frameSnap({ w: bbox.w, h: bbox.h }, left, top, others);
+        if (s.left !== null) {
+          left = s.left;
+          guideX = s.guideX;
+        } else {
+          const c = left + bbox.w / 2;
+          left = Math.round(c / 4) * 4 - bbox.w / 2;
+        }
+        if (s.top !== null) {
+          top = s.top;
+          guideY = s.guideY;
+        } else {
+          const c = top + bbox.h / 2;
+          top = Math.round(c / 4) * 4 - bbox.h / 2;
+        }
+      }
+      const fdx = left - bbox.left, fdy = top - bbox.top;
+      for (const { frame: mf } of drag.members) moveFrame(profile, mf, mf.rect.left + fdx, mf.rect.top + fdy, v);
       renderGuides(guideX, guideY, v);
     }
     render();
@@ -5773,15 +5880,59 @@ function finishDrag(cancel = false) {
     status("Drag canceled");
   } else {
     render();
-    status(d.moved ? `${d.frame.label} ${d.resize ? "resized" : "moved"}` : `${d.frame.label} selected`);
+    const label = d.resize ? d.resizeFrame.label : d.members.length > 1 ? `${d.members.length} frames` : d.members[0].frame.label;
+    status(d.moved ? `${label} ${d.resize ? "resized" : "moved"}` : `${label} selected`);
   }
   focusFrame();
 }
-$("#stage").addEventListener("pointerup", () => finishDrag());
-$("#stage").addEventListener("pointercancel", () => finishDrag(true));
+function finishMarquee() {
+  if (!marquee) return;
+  const m = marquee;
+  marquee = null;
+  $("#marquee").style.display = "none";
+  if (!m.moved) return;
+  const hits = frames.filter((f) => {
+    if (!f.rect) return false;
+    const el = document.querySelector(`#frames [data-id="${CSS.escape(f.id)}"]`);
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return r.left < m.rect.right && r.right > m.rect.left && r.top < m.rect.bottom && r.bottom > m.rect.top;
+  });
+  if (!hits.length) return;
+  if (m.additive) {
+    for (const f of hits) group.add(f.id);
+    selected = hits[hits.length - 1].id;
+  } else {
+    group = new Set(hits.map((f) => f.id));
+    selected = hits[0].id;
+  }
+  render();
+  status(hits.length > 1 ? `${hits.length} frames selected` : `${hits[0].label} selected`);
+}
+$("#stage").addEventListener("pointerup", () => {
+  finishDrag();
+  finishMarquee();
+});
+$("#stage").addEventListener("pointercancel", () => {
+  finishDrag(true);
+  if (marquee) {
+    marquee = null;
+    $("#marquee").style.display = "none";
+  }
+});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && drag) {
     finishDrag(true);
+    return;
+  }
+  if (e.key === "Escape" && marquee) {
+    marquee = null;
+    $("#marquee").style.display = "none";
+    return;
+  }
+  if (e.key === "Escape" && group.size > 1) {
+    group = /* @__PURE__ */ new Set([selected]);
+    render();
     return;
   }
   if ($("#dialog").open || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
@@ -5792,10 +5943,12 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.target.closest("#frames") && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
     e.preventDefault();
-    const f = selectedFrame();
-    if (!f?.rect) return;
-    const n = e.shiftKey ? 10 : 1;
-    mutate(() => moveFrame(profile, f, f.rect.left + (e.key === "ArrowLeft" ? -n : e.key === "ArrowRight" ? n : 0), f.rect.top + (e.key === "ArrowUp" ? -n : e.key === "ArrowDown" ? n : 0), viewport()), `${f.label} nudged`);
+    const members = draggableGroupFrames();
+    if (!members.length) return;
+    const n = e.shiftKey ? 10 : 1, ddx = e.key === "ArrowLeft" ? -n : e.key === "ArrowRight" ? n : 0, ddy = e.key === "ArrowUp" ? -n : e.key === "ArrowDown" ? n : 0;
+    mutate(() => {
+      for (const f of members) moveFrame(profile, f, f.rect.left + ddx, f.rect.top + ddy, viewport());
+    }, members.length > 1 ? `${members.length} frames nudged` : `${members[0].label} nudged`);
     focusFrame();
   }
 });
@@ -5836,7 +5989,7 @@ function dialog(html) {
   if (!$("#dialog").open) $("#dialog").showModal();
 }
 function showHelp() {
-  dialog(`<h2>Your UI, outside the game</h2><p>Import \u2192 arrange \u2192 export. All profile processing happens in your browser. Imported files are not uploaded.</p><p class="notice">WoW: Forever is the intended target. This editor currently uses Retail ElvUI settings. Forever support and in-game round-trip compatibility have not yet been verified.</p><p>Supported inputs: current <code>!E2!</code> and legacy <code>!E1!</code> character profile strings, ElvUI Lua table profile exports, and account <code>SavedVariables/ElvUI.lua</code> files.</p><p>Find your backup under your WoW installation \u2192 <code>WTF/Account/&lt;account&gt;/SavedVariables/ElvUI.lua</code>. The game-version folder depends on your installation. Keep the original backup.</p><p>The canvas is approximate. Absent mover positions use this editor\u2019s estimates, not an exact reproduction of ElvUI defaults. Custom and plugin movers are editable anchor markers when their frame dimensions are unknown. Plugins, fonts, textures, private/global settings, and combat behavior are not simulated.</p><p>Viewport and UI scale affect the preview only. Editing a frame by dragging anchors it to the center of UIParent. Unresolved relative anchors are preserved and not moved.</p><p><a href="https://github.com/tukui-org/ElvUI/blob/main/ElvUI/Game/Shared/General/Distributor.lua" target="_blank" rel="noopener">ElvUI import/export source</a> \xB7 <a href="https://github.com/tukui-org/ElvUI/wiki/export" target="_blank" rel="noopener">ElvUI profile guide</a></p>`);
+  dialog(`<h2>Your UI, outside the game</h2><p>Import \u2192 arrange \u2192 export. All profile processing happens in your browser. Imported files are not uploaded.</p><p class="notice">WoW: Forever is the intended target. This editor currently uses Retail ElvUI settings. Forever support and in-game round-trip compatibility have not yet been verified.</p><p>Supported inputs: current <code>!E2!</code> and legacy <code>!E1!</code> character profile strings, ElvUI Lua table profile exports, and account <code>SavedVariables/ElvUI.lua</code> files.</p><p>Find your backup under your WoW installation \u2192 <code>WTF/Account/&lt;account&gt;/SavedVariables/ElvUI.lua</code>. The game-version folder depends on your installation. Keep the original backup.</p><p>The canvas is approximate. Absent mover positions use this editor\u2019s estimates, not an exact reproduction of ElvUI defaults. Custom and plugin movers are editable anchor markers when their frame dimensions are unknown. Plugins, fonts, textures, private/global settings, and combat behavior are not simulated.</p><p>Viewport and UI scale affect the preview only. Editing a frame by dragging anchors it to the center of UIParent. Unresolved relative anchors are preserved and not moved.</p><p>Ctrl/Cmd-click or Shift-click a frame to add it to a selection, or drag an empty area of the canvas to draw a selection box. Dragging any selected frame moves the whole group together; group snapping aligns the group's overall bounding box, not each frame individually.</p><p><a href="https://github.com/tukui-org/ElvUI/blob/main/ElvUI/Game/Shared/General/Distributor.lua" target="_blank" rel="noopener">ElvUI import/export source</a> \xB7 <a href="https://github.com/tukui-org/ElvUI/wiki/export" target="_blank" rel="noopener">ElvUI profile guide</a></p>`);
 }
 $("#help").onclick = showHelp;
 $("#import").onclick = () => {
@@ -5864,6 +6017,7 @@ $("#import").onclick = () => {
           name = p.name;
           source = `Imported ${p.format}`;
           selected = "player";
+          group = /* @__PURE__ */ new Set(["player"]);
         }, `Loaded ${p.name}; original file unchanged`);
         $("#profile-name").value = name;
         $("#dialog").close();

@@ -9,3 +9,6 @@
 #guides{position:absolute;inset:0;pointer-events:none;z-index:7}.guide{position:absolute;background:#ff5fa8;box-shadow:0 0 6px #ff5fa8aa}.guide.v{top:0;bottom:0;width:1px}.guide.h{left:0;right:0;height:1px}
 .layers,.inspector{max-height:calc(100vh - 180px);overflow-y:auto;scrollbar-color:#405466 #101923}
 @media(max-width:850px){.layers,.inspector{max-height:none;overflow-y:visible}}
+.layer.grouped{background:#152726;border-color:#2c4a46;color:#8fd6c0}
+.frame.group-selected,.frame.bar.group-selected{outline:0;box-shadow:inset 0 0 0 2px #66e4c099,0 3px 6px #0007;z-index:4}
+#marquee{position:absolute;display:none;border:1px solid var(--mint);background:#66e4c022;pointer-events:none;z-index:9}
