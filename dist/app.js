@@ -5346,6 +5346,11 @@ var unit = (id, label, mover, x, y, w = 270, h = 54) => ({ id, label, mover, kin
 var DEFAULT_ENABLED_BARS = /* @__PURE__ */ new Set([1, 3, 4, 5]);
 var bar = (n, x = 0, y = -370) => ({ id: `bar${n}`, label: `Action bar ${n}`, mover: `ElvAB_${n}`, kind: "bar", path: ["actionbar", `bar${n}`], x, y, w: 406, h: 32, enable: true, enableKey: "enabled", defaultEnabled: DEFAULT_ENABLED_BARS.has(n), defaultButtons: n === 3 || n === 5 ? 6 : 12, defaultCols: n === 4 ? 1 : n === 3 || n === 5 ? 6 : 12, defaultBackdrop: n === 4 });
 var ACTION_BAR_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15];
+var NAMED_BARS = [
+  { id: "barPet", label: "Pet Bar", mover: "PetAB", x: 700, y: 250, defaultButtons: 10, defaultCols: 1, defaultBackdrop: true },
+  { id: "stanceBar", label: "Stance Bar", mover: "ShiftAB", x: -700, y: 250, defaultButtons: 4, defaultCols: 4, defaultBackdrop: false }
+];
+var namedBar = (spec) => ({ id: spec.id, label: spec.label, mover: spec.mover, kind: "bar", path: ["actionbar", spec.id], x: spec.x, y: spec.y, w: 406, h: 32, enable: true, enableKey: "enabled", defaultEnabled: true, defaultButtons: spec.defaultButtons, defaultCols: spec.defaultCols, defaultBackdrop: spec.defaultBackdrop });
 var BENIKUI_PORTRAITS = [["player", "Player"], ["target", "Target"], ["targettarget", "Target target"], ["focus", "Focus"], ["pet", "Pet"]];
 var BENIKUI_DASHBOARDS = [
   ["system", "BuiDashboardMover", "System dashboard", 150],
@@ -5448,6 +5453,10 @@ function framesFor(p, viewport2) {
   for (const n of ACTION_BAR_IDS.slice(2)) {
     const d = bar(n, n === 4 ? 900 : n >= 6 ? 850 : 0, n === 3 ? -280 : n === 4 ? 0 : n === 5 ? -370 : 140 + (n - 6) * 38);
     if (get(p, d.path) instanceof Map || get(p, ["movers", d.mover]) !== void 0) defs.splice(4 + n, 0, d);
+  }
+  for (const spec of NAMED_BARS) {
+    const d = namedBar(spec);
+    if (get(p, d.path) instanceof Map || get(p, ["movers", d.mover]) !== void 0) defs.push(d);
   }
   defs.push(...benikUIDefinitions(p));
   if (movers instanceof Map) {

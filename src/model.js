@@ -4,6 +4,11 @@ const unit=(id,label,mover,x,y,w=270,h=54)=>({id,label,mover,kind:id,path:['unit
 const DEFAULT_ENABLED_BARS=new Set([1,3,4,5]);
 const bar=(n,x=0,y=-370)=>({id:`bar${n}`,label:`Action bar ${n}`,mover:`ElvAB_${n}`,kind:'bar',path:['actionbar',`bar${n}`],x,y,w:406,h:32,enable:true,enableKey:'enabled',defaultEnabled:DEFAULT_ENABLED_BARS.has(n),defaultButtons:n===3||n===5?6:12,defaultCols:n===4?1:n===3||n===5?6:12,defaultBackdrop:n===4});
 export const ACTION_BAR_IDS=[1,2,3,4,5,6,7,8,9,10,13,14,15];
+const NAMED_BARS=[
+ {id:'barPet',label:'Pet Bar',mover:'PetAB',x:700,y:250,defaultButtons:10,defaultCols:1,defaultBackdrop:true},
+ {id:'stanceBar',label:'Stance Bar',mover:'ShiftAB',x:-700,y:250,defaultButtons:4,defaultCols:4,defaultBackdrop:false},
+];
+const namedBar=spec=>({id:spec.id,label:spec.label,mover:spec.mover,kind:'bar',path:['actionbar',spec.id],x:spec.x,y:spec.y,w:406,h:32,enable:true,enableKey:'enabled',defaultEnabled:true,defaultButtons:spec.defaultButtons,defaultCols:spec.defaultCols,defaultBackdrop:spec.defaultBackdrop});
 const BENIKUI_PORTRAITS=[['player','Player'],['target','Target'],['targettarget','Target target'],['focus','Focus'],['pet','Pet']];
 const BENIKUI_DASHBOARDS=[
  ['system','BuiDashboardMover','System dashboard',150],['tokens','tokenHolderMover','Tokens dashboard',150],
@@ -44,7 +49,7 @@ function benikUIDefinitions(p){
  return defs;
 }
 export function framesFor(p,viewport){
- const defs=[...DEFINITIONS],movers=get(p,['movers']);for(const n of ACTION_BAR_IDS.slice(2)){const d=bar(n,n===4?900:n>=6?850:0,n===3?-280:n===4?0:n===5?-370:140+(n-6)*38);if(get(p,d.path)instanceof Map||get(p,['movers',d.mover])!==undefined)defs.splice(4+n,0,d);}defs.push(...benikUIDefinitions(p));if(movers instanceof Map)for(const [m]of movers)if(typeof m==='string'&&!defs.some(d=>d.mover===m)){const label=m.replace(/Mover$/,'').replace(/[_-]+/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').trim()||m;defs.push({id:m,label,kind:'anchor',mover:m,w:12,h:12,x:0,y:0,anchorOnly:true});}
+ const defs=[...DEFINITIONS],movers=get(p,['movers']);for(const n of ACTION_BAR_IDS.slice(2)){const d=bar(n,n===4?900:n>=6?850:0,n===3?-280:n===4?0:n===5?-370:140+(n-6)*38);if(get(p,d.path)instanceof Map||get(p,['movers',d.mover])!==undefined)defs.splice(4+n,0,d);}for(const spec of NAMED_BARS){const d=namedBar(spec);if(get(p,d.path)instanceof Map||get(p,['movers',d.mover])!==undefined)defs.push(d);}defs.push(...benikUIDefinitions(p));if(movers instanceof Map)for(const [m]of movers)if(typeof m==='string'&&!defs.some(d=>d.mover===m)){const label=m.replace(/Mover$/,'').replace(/[_-]+/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').trim()||m;defs.push({id:m,label,kind:'anchor',mover:m,w:12,h:12,x:0,y:0,anchorOnly:true});}
  const frames=defs.map(d=>{const raw=get(p,['movers',d.mover]),dims=dimensions(p,d),layout=d.kind==='bar'?actionBarLayout(p,d):null;return {...d,...dims,moverW:layout?.moverW??dims.w,moverH:layout?.moverH??dims.h,inset:layout?.inset??0,enabled:d.enable?get(p,[...d.path,d.enableKey||'enable'],d.defaultEnabled??true)!==false:true,moverData:parseMover(raw),raw,estimated:raw===undefined};});
  const roots=['UIParent','ElvUIParent'];
  function resolve(f,seen=new Set()){
